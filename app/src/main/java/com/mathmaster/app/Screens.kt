@@ -342,6 +342,7 @@ fun TrainingScreen(vm: TrainerViewModel) {
             enabled = u.feedback == Feedback.None,
             onKey = vm::onKey,
             onDelete = vm::onDelete,
+            onClear = vm::onClear,
             onSubmit = vm::submit
         )
     }
@@ -473,6 +474,7 @@ fun Keypad(
     enabled: Boolean,
     onKey: (String) -> Unit,
     onDelete: () -> Unit,
+    onClear: () -> Unit,
     onSubmit: () -> Unit
 ) {
     val c = AppTheme.colors
@@ -488,17 +490,18 @@ fun Keypad(
                 row.forEach { k -> KeyButton(k, Modifier.weight(1f), enabled) { onKey(k) } }
             }
         }
+        // FIX #8: perf — "C" clears the whole input, "⌫" removes one character.
+        // C lives in the left slot on every category; "." moved to the fraction row below.
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            if (fractionKeys) KeyButton(".", Modifier.weight(1f), enabled) { onKey(".") }
-            else Spacer(Modifier.weight(1f))
+            KeyButton("C", Modifier.weight(1f), enabled) { onClear() }
             KeyButton("0", Modifier.weight(1f), enabled) { onKey("0") }
             KeyButton("⌫", Modifier.weight(1f), enabled) { onDelete() }
         }
         if (fractionKeys) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                KeyButton(".", Modifier.weight(1f), enabled) { onKey(".") }
                 KeyButton("/", Modifier.weight(1f), enabled) { onKey("/") }
                 KeyButton("%", Modifier.weight(1f), enabled) { onKey("%") }
-                Spacer(Modifier.weight(1f))
             }
         }
         GradientButton("Submit", Modifier.fillMaxWidth(), enabled = enabled) { onSubmit() }

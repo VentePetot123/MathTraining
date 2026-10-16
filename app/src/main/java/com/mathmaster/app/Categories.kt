@@ -181,7 +181,7 @@ object Categories {
             Color(0xFF8E2DE2), Color(0xFF4A00E0), 1, 20, 99, false, ::genSquares),
         Category("cubes", "Cubes & Roots", "x³", "Perfect cubes and cube roots",
             Color(0xFFF2994A), Color(0xFFE5A100), 1, 10, 99, false, ::genCubes),
-        Category("fdp", "Fractions, Decimals,\nPercentages", "%", "Fraction, decimal and percentage equivalents (range = denominators)",
+        Category("fdp", "Fractions, Decimals, Percentages", "%", "Fraction, decimal and percentage equivalents (range = denominators)",
             Color(0xFF56AB2F), Color(0xFF2E8B57), 1, 8, 30, true, ::genFdp),
         Category("powers2", "Powers of 2", "2ⁿ", "Powers of 2",
             Color(0xFFFF416C), Color(0xFFFF4B2B), 1, 10, 30, false, ::genPowers2),

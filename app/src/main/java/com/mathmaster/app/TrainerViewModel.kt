@@ -116,6 +116,9 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
 
     // ---------- startup ----------
     suspend fun preload() = withContext(Dispatchers.Default) {
+        // FIX #8: perf — one-time migration for the powers split. Runs on IO before
+        // the first menu read so the migrated data is already in place.
+        store.migratePowersSplit()
         refreshMenu()
     }
 

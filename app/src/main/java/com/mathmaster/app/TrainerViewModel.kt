@@ -88,6 +88,10 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     // instead of freezing on a static "Loading…" label.
     var dashboardLoading by mutableStateOf(false)
         private set
+    // FIX #8: perf — full-screen reset overlay. Null when idle; a label while running.
+    // The overlay composes only while this is non-null, so it leaves no trace.
+    var resetting by mutableStateOf<String?>(null)
+        private set
 
     fun loadDashboard() {
         // FIX #8: perf — mark loading so the UI can render a progress bar; clear
@@ -195,26 +199,54 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         rangeMax = b.coerceIn(rangeMin, selected.hardMax)
     }
 
+    // FIX #8: perf — show a full-screen overlay while the reset runs. The overlay is
+    // driven by real work (not a timer): it clears the moment the engine has flushed
+    // AND the fresh dashboard snapshot is committed. Because the flag is nulled only
+    // at the end, the bar stays visible for as long as the reset actually takes.
     fun resetSelectedCategory() {
-        engine.reset(selected.id)
-        refreshMenu()
+        if (resetting != null) return   // ignore double-taps
+        resetting = "Resetting Category"
         dashboard = null
-        loadDashboard()          // FIX #8: reload so the dashboard doesn't stay frozen
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                engine.reset(selected.id)
+                engine.flush()
+            }
+            // Reload snapshot off the main thread, then commit; only then drop the overlay.
+            val data = withContext(Dispatchers.IO) {
+                DashboardData(
+                    Categories.all.associate { it.id to engine.mastery(it.id) },
+                    Categories.all.associate { it.id to engine.history(it.id) },
+                    Categories.all.associate { it.id to engine.details(it.id) }
+                )
+            }
+            dashboard = data
+            refreshMenu()
+            resetting = null
+        }
     }
 
-    // FIX #8: perf — wipe all categories; called only after 2 explicit confirmations.
-    // The reset runs on IO, then the dashboard is reloaded on the same coroutine so
-    // the UI shows a bar until the fresh (empty) snapshot is ready.
+    // FIX #8: perf — wipe all categories; the overlay covers the screen until both the
+    // wipe and the reload finish. Same "resetting" flag drives the UI.
     fun resetAllProgress() {
+        if (resetting != null) return
+        resetting = "Resetting All Progress"
         dashboard = null
-        dashboardLoading = true
-        refreshMenu()
         viewModelScope.launch {
             withContext(Dispatchers.IO) {
                 Categories.all.forEach { engine.reset(it.id) }
                 engine.flush()
             }
-            loadDashboard()      // FIX #8: single source of truth for populating the dashboard
+            val data = withContext(Dispatchers.IO) {
+                DashboardData(
+                    Categories.all.associate { it.id to engine.mastery(it.id) },
+                    Categories.all.associate { it.id to engine.history(it.id) },
+                    Categories.all.associate { it.id to engine.details(it.id) }
+                )
+            }
+            dashboard = data
+            refreshMenu()
+            resetting = null
         }
     }
 

@@ -325,6 +325,13 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         ui = u.copy(input = u.input.dropLast(1), hint = null)
     }
 
+    // FIX #8: perf — clear the whole input. Distinct from onDelete (backspace).
+    fun onClear() {
+        val u = ui ?: return
+        if (u.feedback != Feedback.None || u.input.isEmpty()) return
+        ui = u.copy(input = "", hint = null)
+    }
+
     fun submit() {
         val u = ui ?: return
         val f = u.fact ?: return

@@ -118,10 +118,19 @@ private fun genCubes(lo: Int, hi: Int): List<Fact> {
     return out
 }
 
-private fun genPowers(lo: Int, hi: Int): List<Fact> {
+// FIX #8: perf — Powers split into two categories. Each generator emits only its base,
+// so the "Powers of 2" card can't accidentally surface a 3^n fact (and vice versa).
+private fun genPowers2(lo: Int, hi: Int): List<Fact> {
     val out = ArrayList<Fact>()
     for (e in lo..hi) {
         out.add(intFact("2^$e", "2^$e = ?", pow(2, e), "2^$e = ${pow(2, e)}"))
+    }
+    return out
+}
+
+private fun genPowers3(lo: Int, hi: Int): List<Fact> {
+    val out = ArrayList<Fact>()
+    for (e in lo..hi) {
         out.add(intFact("3^$e", "3^$e = ?", pow(3, e), "3^$e = ${pow(3, e)}"))
     }
     return out
@@ -172,10 +181,12 @@ object Categories {
             Color(0xFF8E2DE2), Color(0xFF4A00E0), 1, 20, 99, false, ::genSquares),
         Category("cubes", "Cubes & Roots", "x³", "Perfect cubes and cube roots",
             Color(0xFFF2994A), Color(0xFFE5A100), 1, 10, 99, false, ::genCubes),
-        Category("fdp", "Fractions · Decimals · %", "%", "Fraction, decimal and percentage equivalents (range = denominators)",
+        Category("fdp", "Fractions, Decimals,\nPercentages", "%", "Fraction, decimal and percentage equivalents (range = denominators)",
             Color(0xFF56AB2F), Color(0xFF2E8B57), 1, 8, 30, true, ::genFdp),
-        Category("powers", "Powers of 2 & 3", "2ⁿ", "Powers of 2 and 3",
-            Color(0xFFFF416C), Color(0xFFFF4B2B), 1, 10, 30, false, ::genPowers),
+        Category("powers2", "Powers of 2", "2ⁿ", "Powers of 2",
+            Color(0xFFFF416C), Color(0xFFFF4B2B), 1, 10, 30, false, ::genPowers2),
+        Category("powers3", "Powers of 3", "3ⁿ", "Powers of 3",
+            Color(0xFFEB5757), Color(0xFFC0392B), 1, 10, 30, false, ::genPowers3),
         Category("factorials", "Factorials", "n!", "Factorial values and finding n from n!",
             Color(0xFFFF8008), Color(0xFFE5532D), 1, 10, 20, false, ::genFactorials)
     )

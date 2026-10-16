@@ -24,11 +24,15 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.Text
+import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.composed
@@ -107,12 +111,13 @@ fun GradientButton(
     onClick: () -> Unit
 ) {
     val shape = RoundedCornerShape(18.dp)
+    // FIX #8: perf — fixed 48dp height so it matches SoftButton when they share a row.
     Box(
         modifier
+            .height(48.dp)
             .alpha(if (enabled) 1f else 0.5f)
             .bounceClick(shape, 8.dp, enabled = enabled, onClick = onClick)
-            .background(brush)
-            .padding(horizontal = 20.dp, vertical = 12.dp),
+            .background(brush),
         contentAlignment = Alignment.Center
     ) {
         Txt(text, 17, FontWeight.Bold, Color.White)
@@ -128,11 +133,15 @@ fun SoftButton(
     size: Int = 15,
     onClick: () -> Unit
 ) {
+    // FIX #8: perf — fixed 48dp height, matching GradientButton. Padding is applied
+    // horizontally only; vertical space comes from the height constraint. This makes
+    // the two buttons pixel-identical in height when paired in a Row.
     Box(
         modifier
+            .height(48.dp)
             .bounceClick(RoundedCornerShape(14.dp), 0.dp, onClick = onClick)
             .background(container)
-            .padding(horizontal = 14.dp, vertical = 9.dp),
+            .padding(horizontal = 14.dp),
         contentAlignment = Alignment.Center
     ) {
         Txt(text, size, FontWeight.SemiBold, content)
@@ -273,11 +282,35 @@ fun FeedbackMark(correct: Boolean, seq: Int, modifier: Modifier = Modifier) {
 @Composable
 fun Stepper(label: String, value: Int, step: Int, onChange: (Int) -> Unit) {
     val c = AppTheme.colors
+    // FIX #8: perf — the middle value is now tap-to-edit. Tapping it opens a compact
+    // numeric keypad dialog; confirming clamps the value to 1..99 before calling
+    // onChange, so out-of-range input can never leak into the VM.
+    var editing by remember { mutableStateOf(false) }
+
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Txt(label, 13, FontWeight.Medium, c.muted, Modifier.weight(1f))
         RoundButtonSmall("−") { onChange(value - step) }
-        Txt(value.toString(), 18, FontWeight.Bold, c.onBackground, Modifier.width(52.dp), TextAlign.Center)
+        // Tap target for the value
+        Box(
+            Modifier
+                .width(52.dp)
+                .bounceClick(RoundedCornerShape(8.dp), 0.dp, onClick = { editing = true }),
+            contentAlignment = Alignment.Center
+        ) {
+            Txt(value.toString(), 18, FontWeight.Bold, c.onBackground, align = TextAlign.Center)
+        }
         RoundButtonSmall("+") { onChange(value + step) }
+    }
+
+    if (editing) {
+        NumberInputDialog(
+            initial = value,
+            onDismiss = { editing = false },
+            onConfirm = { picked ->
+                editing = false
+                onChange(picked)     // VM applies its own coerceIn on top of this
+            }
+        )
     }
 }
 
@@ -415,5 +448,103 @@ fun RoundButtonSmall(text: String, onClick: () -> Unit) {
         contentAlignment = Alignment.Center
     ) {
         Txt(text, 16, FontWeight.Bold, AppTheme.colors.onBackground)
+    }
+}
+
+// FIX #8: perf — compact numeric entry dialog used by the range steppers. Reuses the
+// same keypad layout as the training screen (1-9, C, 0, ⌫) but keeps its own local
+// buffer so the current value isn't overwritten until the user confirms.
+@Composable
+fun NumberInputDialog(
+    initial: Int,
+    onDismiss: () -> Unit,
+    onConfirm: (Int) -> Unit
+) {
+    val c = AppTheme.colors
+    var buffer by remember { mutableStateOf(initial.toString()) }
+
+    fun append(d: Char) {
+        if (buffer.length >= 2) return                // max 2 digits (<=99)
+        buffer = if (buffer == "0") d.toString() else buffer + d
+    }
+    fun clear() { buffer = "" }
+    fun backspace() { buffer = buffer.dropLast(1) }
+
+    AlertDialog(
+        onDismissRequest = onDismiss,
+        containerColor = c.surface,
+        titleContentColor = c.onBackground,
+        textContentColor = c.muted,
+        title = { Txt("Enter value (1–99)", 16, FontWeight.Bold) },
+        text = {
+            Column(
+                Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                // Live preview of the current buffer
+                Box(
+                    Modifier
+                        .fillMaxWidth()
+                        .height(52.dp)
+                        .clip(RoundedCornerShape(12.dp))
+                        .background(c.surfaceAlt),
+                    contentAlignment = Alignment.Center
+                ) {
+                    Txt(
+                        if (buffer.isEmpty()) "—" else buffer,
+                        24,
+                        FontWeight.Bold,
+                        if (buffer.isEmpty()) c.muted else c.onBackground,
+                        align = TextAlign.Center
+                    )
+                }
+
+                // 3x4 mini keypad — same layout as the training keypad, but self-contained
+                for (row in listOf(listOf("1","2","3"), listOf("4","5","6"), listOf("7","8","9"))) {
+                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                        row.forEach { k ->
+                            MiniKey(k, Modifier.weight(1f)) { append(k[0]) }
+                        }
+                    }
+                }
+                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    MiniKey("C", Modifier.weight(1f)) { clear() }
+                    MiniKey("0", Modifier.weight(1f)) { append('0') }
+                    MiniKey("⌫", Modifier.weight(1f)) { backspace() }
+                }
+            }
+        },
+        confirmButton = {
+            val parsed = buffer.toIntOrNull()
+            val valid = parsed != null && parsed in 1..99
+            TextButton(
+                onClick = { if (valid) onConfirm(parsed!!) },
+                enabled = valid
+            ) {
+                Txt(
+                    "Set",
+                    15,
+                    FontWeight.Bold,
+                    if (valid) c.accentA else c.muted
+                )
+            }
+        },
+        dismissButton = {
+            TextButton(onClick = onDismiss) { Txt("Cancel", 15, FontWeight.Medium, c.muted) }
+        }
+    )
+}
+
+@Composable
+private fun MiniKey(label: String, modifier: Modifier, onClick: () -> Unit) {
+    val c = AppTheme.colors
+    Box(
+        modifier
+            .height(40.dp)
+            .bounceClick(RoundedCornerShape(10.dp), 0.dp, onClick = onClick),
+        contentAlignment = Alignment.Center
+    ) {
+        Txt(label, 16, FontWeight.Bold, c.onBackground, align = TextAlign.Center)
     }
 }

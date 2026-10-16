@@ -42,15 +42,19 @@ import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.material3.Text
 import androidx.compose.ui.text.font.FontWeight
+import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
+import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -149,16 +153,15 @@ fun MenuHeader(vm: TrainerViewModel, onOpenProgress: () -> Unit) {
 
 @Composable
 fun CategoryCard(index: Int, cat: Category, s: CatSummary?, onClick: () -> Unit) {
-    // FIX #8: perf — vertical Column layout (symbol → name → stat) instead of the old
-    // TopStart/BottomStart absolute positioning. The old approach overlapped the symbol
-    // with the name when the name wrapped to 2+ lines (e.g. "Fractions, Decimals,
-    // Percentages"). A Column guarantees the three rows never collide, regardless of
-    // how many lines the name takes. Card height bumped to 148dp to give a 3-line name
-    // room alongside the symbol and stat rows.
+    // FIX #8: perf — vertical Column layout (symbol → name → stat) so the three rows
+    // never collide. The name is capped at 2 lines with ellipsis so the stat row
+    // ("Not practiced yet" / "% acc · N facts") is always visible beneath it, even
+    // for the longest category name ("Fractions, Decimals, Percentages"). Card height
+    // stays 148dp; the extra breathing room comes from constraining the name to 2 lines.
     Column(
         Modifier
             .fillMaxWidth()
-            .height(148.dp)
+            .height(170.dp)
             .bounceClick(RoundedCornerShape(22.dp), 8.dp, onClick = onClick)
             .background(Brush.linearGradient(listOf(cat.colorA, cat.colorB)))
             .padding(16.dp),
@@ -167,7 +170,14 @@ fun CategoryCard(index: Int, cat: Category, s: CatSummary?, onClick: () -> Unit)
         Txt(cat.symbol, 30, FontWeight.Bold, Color.White)
 
         Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Txt(cat.name, 14, FontWeight.Bold, Color.White)
+            Text(
+                text = cat.name,
+                color = Color.White,
+                fontSize = 14.sp,
+                fontWeight = FontWeight.Bold,
+                maxLines = 2,
+                overflow = TextOverflow.Ellipsis
+            )
             val stat = if (s == null || s.attempts == 0) "Not practiced yet"
             else "${s.accuracyPct}% acc · ${s.facts} facts"
             Txt(stat, 11, FontWeight.Medium, Color.White.copy(alpha = 0.85f))
@@ -242,15 +252,11 @@ fun RangeScreen(vm: TrainerViewModel) {
         else "${s.attempts} attempts · ${s.accuracyPct}% accuracy · ${s.facts} facts practiced"
         Txt(statText, 11, FontWeight.Medium, c.muted, Modifier.fillMaxWidth(), TextAlign.Center)
 
-        Spacer(Modifier.weight(1f))   // FIX #8: perf — absorbs slack so buttons pin to bottom
+        // FIX #8: perf — single action row.
 
-        // ---- Actions ----
-        GradientButton("Start practice", Modifier.fillMaxWidth()) { vm.startSession() }
-
-        // FIX #8: perf — Menu now has no arrow glyph (was "← Menu"). Reset Category
-        // is replaced by a second Start Practice button with the same gradient as the
-        // primary one above. The alert dialog state (confirmReset) is left wired but
-        // unreachable from this screen, matching the user's explicit request.
+        // FIX #8: perf — single action row. The previous "Start practice" at the top
+        // was a duplicate of the one in the bottom row; removed to remove ambiguity
+        // and to reclaim vertical space.
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SoftButton("Menu", Modifier.weight(1f), size = 14) { vm.toMenu() }
             GradientButton("Start Practice", Modifier.weight(1f)) { vm.startSession() }
@@ -587,10 +593,15 @@ fun ProgressScreen(vm: TrainerViewModel) {
     // the Column and could be occluded by the fading AlertDialog when reset completed
     // faster than the dialog's dismiss animation.
     Box(Modifier.fillMaxSize()) {
+    // FIX #8: perf — blur the dashboard behind the overlay only while a reset is
+    // running. `resetting != null` is the trigger; the blur is applied to the content
+    // itself, so the overlay on top just needs a translucent tint to complete the
+    // "frosted glass" look. blur(0.dp) below API 31 is a no-op — the tint still works.
     Column(
         Modifier.fillMaxSize().background(c.background)
-            .verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .then(if (vm.resetting != null) Modifier.blur(16.dp) else Modifier)
+            .verticalScroll(rememberScrollState()).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
         ProgressHeader("Progress Dashboard", "All categories") { vm.toMenu() }
 
@@ -676,8 +687,11 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
     // the scroll content and above any AlertDialog scrim. Without this, the per-category
     // reset appeared to "do nothing" because the overlay was hidden behind the dialog.
     Box(Modifier.fillMaxSize()) {
+    // FIX #8: perf — same conditional blur as ProgressScreen so the Category Detail
+    // screen also frosts its content behind the reset overlay.
     Column(
         Modifier.fillMaxSize().background(c.background)
+            .then(if (vm.resetting != null) Modifier.blur(16.dp) else Modifier)
             .verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
@@ -1006,13 +1020,14 @@ private fun CountdownOverlay(label: String) {
 // immediate and leaves no residual scrim or layer behind.
 @Composable
 private fun ResetOverlay(label: String) {
-    val c = AppTheme.colors
-    // Blur-like effect via a solid dark scrim. No Modifier.blur() — that would force
-    // an offscreen pass every frame and defeat the whole point of FIX #8.
+    // FIX #8: perf — overlay is just a translucent tint. The blur is applied by the
+    // caller to the CONTENT BEHIND this overlay, so the frosted-glass look comes from
+    // two independent layers: (1) content blurred, (2) tint on top. Doing both here
+    // would blur the tint itself — which is a solid color, and therefore a no-op.
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color(0xE60F1020)),
+            .background(Color(0x9A0F1020)),   // 60% opaque — content still visible
         contentAlignment = Alignment.Center
     ) {
         Column(

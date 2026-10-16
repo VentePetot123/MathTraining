@@ -674,24 +674,35 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
             .verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Column(
-            Modifier.fillMaxWidth().shadow(10.dp, shape).clip(shape)
-                .background(Brush.linearGradient(listOf(cat.colorA, cat.colorB))).padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+        // FIX #8: perf — compact hero matching the reference: symbol + name on the
+        // same row, small blurb underneath. Height drops from ~180dp to ~72dp.
+        Row(
+            Modifier.fillMaxWidth().shadow(8.dp, shape).clip(shape)
+                .background(Brush.linearGradient(listOf(cat.colorA, cat.colorB)))
+                .padding(horizontal = 16.dp, vertical = 14.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Txt(cat.symbol, 40, FontWeight.Bold, Color.White)
-            Txt(cat.name, 26, FontWeight.ExtraBold, Color.White)
-            Txt("Detailed progress", 14, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
+            Txt(cat.symbol, 26, FontWeight.Bold, Color.White)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Txt(cat.name, 18, FontWeight.ExtraBold, Color.White)
+                Txt("Detailed progress", 11, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
+            }
         }
 
+        // FIX #8: perf — tighter action row: one primary button + two secondaries
+        // side by side, halving the vertical space they consume.
         GradientButton("Start Practice", Modifier.fillMaxWidth()) { vm.startSession() }
-        SoftButton("Menu", Modifier.fillMaxWidth()) { vm.toMenu() }
-        SoftButton(
-            "Reset Category",
-            Modifier.fillMaxWidth(),
-            container = c.error.copy(alpha = 0.15f),
-            content = c.error
-        ) { resetStep = 1 }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SoftButton("Menu", Modifier.weight(1f), size = 14) { vm.toMenu() }
+            SoftButton(
+                "Reset Category",
+                Modifier.weight(1f),
+                container = c.error.copy(alpha = 0.15f),
+                content = c.error,
+                size = 14
+            ) { resetStep = 1 }
+        }
 
         if (vm.dashboardLoading || dash == null) {
             DashboardLoadingIndicator()
@@ -783,27 +794,30 @@ fun CategoryProgressSection(
 ) {
     val c = AppTheme.colors
     val clickMod = if (onOpen != null)
-        Modifier.bounceClick(RoundedCornerShape(22.dp), 4.dp, onClick = onOpen)
+        Modifier.bounceClick(RoundedCornerShape(20.dp), 4.dp, onClick = onOpen)
     else Modifier
 
-    AppCard(clickMod) {
+    // FIX #8: perf — compact card. Smaller paddings, tighter spacing, and smaller
+    // typography everywhere so the whole section fits the reference look and the
+    // dashboard stays short. Behaviour is identical; only the visual scale changed.
+    CompactCard(clickMod) {
         // Header row
         Row(verticalAlignment = Alignment.CenterVertically) {
-            Txt(cat.symbol, 24, FontWeight.Bold, c.accentA)
-            Spacer(Modifier.width(10.dp))
-            Txt(cat.name, 18, FontWeight.Bold)
+            Txt(cat.symbol, 20, FontWeight.Bold, c.accentA)
+            Spacer(Modifier.width(8.dp))
+            Txt(cat.name, 15, FontWeight.Bold)
         }
 
         // Mastery breakdown (three stacked bars)
-        Txt("Mastery", 13, FontWeight.SemiBold, c.muted)
+        Txt("Mastery", 11, FontWeight.SemiBold, c.muted)
         MasteryBar("Mastered",   mastery.first,    c.success)
         MasteryBar("Learning",   mastery.second,   c.warning)
         MasteryBar("Struggling", mastery.third,    c.error)
 
         // Strengths & weaknesses text summary
         val (strongTxt, weakTxt) = summarize(mastery, details)
-        Txt("Strengths: $strongTxt", 13, FontWeight.Medium, c.success)
-        Txt("Weaknesses: $weakTxt", 13, FontWeight.Medium, c.error)
+        Txt("Strengths: $strongTxt", 11, FontWeight.Medium, c.success)
+        Txt("Weaknesses: $weakTxt", 11, FontWeight.Medium, c.error)
 
         // Trend chart (empty state handled inside)
         TrendChart(history)
@@ -819,18 +833,18 @@ fun CategoryProgressSection(
         )
 
         if (sortedByCorrect.any { it.correct > 0 }) {
-            Txt("Strengths (detailed)", 13, FontWeight.SemiBold, c.muted)
+            Txt("Strengths (detailed)", 11, FontWeight.SemiBold, c.muted)
             sortedByCorrect.filter { it.correct > 0 }.take(5).forEach { d ->
                 Txt("${d.key}  ✓${d.correct}  avg ${(d.avgMs / 1000.0).format1()}s",
-                    13, FontWeight.Normal, c.onBackground)
+                    11, FontWeight.Normal, c.onBackground)
             }
         }
 
         if (sortedByWrong.any { it.incorrect > 0 }) {
-            Txt("Weaknesses (detailed)", 13, FontWeight.SemiBold, c.muted)
+            Txt("Weaknesses (detailed)", 11, FontWeight.SemiBold, c.muted)
             sortedByWrong.filter { it.incorrect > 0 }.take(5).forEach { d ->
                 Txt("${d.key}  ✗${d.incorrect}  last seen ${agoString(d.lastSeen)}",
-                    13, FontWeight.Normal, c.onBackground)
+                    11, FontWeight.Normal, c.onBackground)
             }
         }
     }

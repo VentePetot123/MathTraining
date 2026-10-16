@@ -46,6 +46,11 @@ data class ResultsUi(
 data class Totals(val answers: Int, val sessions: Int, val bestStreak: Int)
 
 class TrainerViewModel(app: Application) : AndroidViewModel(app) {
+    companion object {
+        // FIX #8: perf — minimum time the reset overlay stays on-screen so the user
+        // always sees feedback, even when the underlying work finishes in <100ms.
+        private const val MIN_RESET_OVERLAY_MS = 650L
+    }
     private val store = Store(app)
     private val engineLazy = lazy { AdaptiveEngine(store) }   // lazy init: created in preload()
     private val engine: AdaptiveEngine get() = engineLazy.value
@@ -202,20 +207,17 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         rangeMax = b.coerceIn(rangeMin, selected.hardMax)
     }
 
-    // FIX #8: perf — show a full-screen overlay while the reset runs. The overlay is
-    // driven by real work (not a timer): it clears the moment the engine has flushed
-    // AND the fresh dashboard snapshot is committed. Because the flag is nulled only
-    // at the end, the bar stays visible for as long as the reset actually takes.
-    fun resetSelectedCategory() {
-        if (resetting != null) return   // ignore double-taps
-        resetting = "Resetting Category"
+    // FIX #8: perf — overlay is guaranteed visible for a minimum duration so the
+    // user perceives it even when the underlying reset completes in <100ms. The
+    // flag is set SYNCHRONOUSLY before any launch, and cleared only after BOTH the
+    // minimum window has elapsed AND the work + dashboard reload have finished.
+    private fun runReset(label: String, work: suspend () -> Unit) {
+        if (resetting != null) return       // ignore re-entrant calls
+        resetting = label                    // synchronous — overlay appears this frame
         dashboard = null
         viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                engine.reset(selected.id)
-                engine.flush()
-            }
-            // Reload snapshot off the main thread, then commit; only then drop the overlay.
+            val start = SystemClock.elapsedRealtime()
+            withContext(Dispatchers.IO) { work() }
             val data = withContext(Dispatchers.IO) {
                 DashboardData(
                     Categories.all.associate { it.id to engine.mastery(it.id) },
@@ -225,32 +227,22 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
             }
             dashboard = data
             refreshMenu()
+            // Hold the overlay for a minimum so it's always perceived.
+            val elapsed = SystemClock.elapsedRealtime() - start
+            val remaining = (MIN_RESET_OVERLAY_MS - elapsed).coerceAtLeast(0L)
+            if (remaining > 0) delay(remaining)
             resetting = null
         }
     }
 
-    // FIX #8: perf — wipe all categories; the overlay covers the screen until both the
-    // wipe and the reload finish. Same "resetting" flag drives the UI.
-    fun resetAllProgress() {
-        if (resetting != null) return
-        resetting = "Resetting All Progress"
-        dashboard = null
-        viewModelScope.launch {
-            withContext(Dispatchers.IO) {
-                Categories.all.forEach { engine.reset(it.id) }
-                engine.flush()
-            }
-            val data = withContext(Dispatchers.IO) {
-                DashboardData(
-                    Categories.all.associate { it.id to engine.mastery(it.id) },
-                    Categories.all.associate { it.id to engine.history(it.id) },
-                    Categories.all.associate { it.id to engine.details(it.id) }
-                )
-            }
-            dashboard = data
-            refreshMenu()
-            resetting = null
-        }
+    fun resetSelectedCategory() = runReset("Resetting Category") {
+        engine.reset(selected.id)
+        engine.flush()
+    }
+
+    fun resetAllProgress() = runReset("Resetting All Progress") {
+        Categories.all.forEach { engine.reset(it.id) }
+        engine.flush()
     }
 
     // ---------- session ----------

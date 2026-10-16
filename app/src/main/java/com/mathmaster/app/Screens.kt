@@ -21,12 +21,14 @@ import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
+import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
 import androidx.compose.foundation.lazy.grid.itemsIndexed
 import androidx.compose.foundation.rememberScrollState
+import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
@@ -756,7 +758,7 @@ fun ProgressHeader(title: String, subtitle: String, onBack: () -> Unit) {
         Box(
             Modifier
                 .size(44.dp)
-                .bounceClick(RoundedCornerShape, 0.dp, onClick = onBack)
+                .bounceClick(CircleShape, 0.dp, onClick = onBack)
                 .background(Color.White.copy(alpha = 0.22f)),
             contentAlignment = Alignment.Center
         ) {
@@ -916,6 +918,42 @@ fun DashboardLoadingIndicator() {
                     .fillMaxWidth(fill.value)
                     .clip(pill)
                     .background(c.accent)
+            )
+        }
+    }
+}
+
+// FIX #8: perf — Ready / Set / Solve! countdown overlay. Solid scrim (no blur),
+// animates only alpha + scale via graphicsLayer, so it costs near-zero per frame.
+// Removed from composition the instant `countdown` becomes null → no residual scrim.
+@Composable
+private fun CountdownOverlay(label: String) {
+    val t = remember(label) { Animatable(0f) }
+    LaunchedEffect(label) {
+        t.snapTo(0f)
+        t.animateTo(1f, tween(280, easing = FastOutSlowInEasing))
+    }
+
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xE60F1020)),
+        contentAlignment = Alignment.Center
+    ) {
+        Box(
+            Modifier.graphicsLayer {
+                alpha = t.value
+                scaleX = 0.85f + 0.15f * t.value
+                scaleY = 0.85f + 0.15f * t.value
+            },
+            contentAlignment = Alignment.Center
+        ) {
+            Txt(
+                label,
+                64,
+                FontWeight.ExtraBold,
+                Color.White,
+                align = TextAlign.Center
             )
         }
     }

@@ -625,6 +625,10 @@ fun ProgressScreen(vm: TrainerViewModel) {
         }
     }
 
+    // FIX #8: perf — full-screen reset overlay. Composed only while vm.resetting != null;
+    // clears instantly when the VM drops the flag, leaving no residual scrim.
+    vm.resetting?.let { label -> ResetOverlay(label) }
+
     if (resetStep == 1) {
         AlertDialog(
             onDismissRequest = { resetStep = 0 },
@@ -746,6 +750,9 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
             }
         )
     }
+
+    // FIX #8: perf — same overlay used for the per-category reset.
+    vm.resetting?.let { label -> ResetOverlay(label) }
 }
 
 // =====================================================================
@@ -975,5 +982,72 @@ private fun CountdownOverlay(label: String) {
                 align = TextAlign.Center
             )
         }
+    }
+}
+
+// FIX #8: perf — full-screen reset overlay: dark scrim + centered title + a moving
+// indeterminate bar. Composed only while vm.resetting != null, so removal is
+// immediate and leaves no residual scrim or layer behind.
+@Composable
+private fun ResetOverlay(label: String) {
+    val c = AppTheme.colors
+    // Blur-like effect via a solid dark scrim. No Modifier.blur() — that would force
+    // an offscreen pass every frame and defeat the whole point of FIX #8.
+    Box(
+        Modifier
+            .fillMaxSize()
+            .background(Color(0xE60F1020)),
+        contentAlignment = Alignment.Center
+    ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .padding(horizontal = 40.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(20.dp)
+        ) {
+            Txt(label, 20, FontWeight.ExtraBold, Color.White, align = TextAlign.Center)
+
+            // Indeterminate moving bar: a small gradient segment slides left→right,
+            // driven by a single Animatable. Cost = 1 draw per frame, no allocations.
+            IndeterminateBar()
+
+            Txt("Loading…", 13, FontWeight.Medium, Color.White.copy(alpha = 0.75f))
+        }
+    }
+}
+
+@Composable
+private fun IndeterminateBar() {
+    val c = AppTheme.colors
+    val track = Color.White.copy(alpha = 0.18f)
+    val pill = RoundedCornerShape(50)
+    val anim = remember { Animatable(0f) }
+
+    LaunchedEffect(Unit) {
+        while (true) {
+            anim.snapTo(0f)
+            anim.animateTo(1f, tween(1100, easing = LinearEasing))
+        }
+    }
+
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(6.dp)
+            .clip(pill)
+            .background(track)
+    ) {
+        // The moving segment occupies 30% of the bar and slides from -30% → 100%.
+        Box(
+            Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(0.30f)
+                .graphicsLayer {
+                    translationX = (anim.value * 1.30f - 0.30f) * size.width
+                }
+                .clip(pill)
+                .background(c.accent)
+        )
     }
 }

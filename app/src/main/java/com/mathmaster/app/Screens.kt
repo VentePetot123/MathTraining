@@ -149,21 +149,25 @@ fun MenuHeader(vm: TrainerViewModel, onOpenProgress: () -> Unit) {
 
 @Composable
 fun CategoryCard(index: Int, cat: Category, s: CatSummary?, onClick: () -> Unit) {
-    // FIX #8: perf — removed the per-card LaunchedEffect(delay(index*50)) + AnimatedVisibility
-    // stagger. Nine parallel coroutines each triggering an enter transition inside a
-    // LazyVerticalGrid while the loading screen is still cross-fading caused dropped
-    // frames. Cards now render instantly; a single fade on the whole grid handles polish.
-    Box(
+    // FIX #8: perf — vertical Column layout (symbol → name → stat) instead of the old
+    // TopStart/BottomStart absolute positioning. The old approach overlapped the symbol
+    // with the name when the name wrapped to 2+ lines (e.g. "Fractions, Decimals,
+    // Percentages"). A Column guarantees the three rows never collide, regardless of
+    // how many lines the name takes. Card height bumped to 148dp to give a 3-line name
+    // room alongside the symbol and stat rows.
+    Column(
         Modifier
             .fillMaxWidth()
-            .height(132.dp)
+            .height(148.dp)
             .bounceClick(RoundedCornerShape(22.dp), 8.dp, onClick = onClick)
             .background(Brush.linearGradient(listOf(cat.colorA, cat.colorB)))
-            .padding(16.dp)
+            .padding(16.dp),
+        verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Txt(cat.symbol, 30, FontWeight.Bold, Color.White, Modifier.align(Alignment.TopStart))
-        Column(Modifier.align(Alignment.BottomStart)) {
-            Txt(cat.name, 15, FontWeight.Bold, Color.White)
+        Txt(cat.symbol, 30, FontWeight.Bold, Color.White)
+
+        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+            Txt(cat.name, 14, FontWeight.Bold, Color.White)
             val stat = if (s == null || s.attempts == 0) "Not practiced yet"
             else "${s.accuracyPct}% acc · ${s.facts} facts"
             Txt(stat, 11, FontWeight.Medium, Color.White.copy(alpha = 0.85f))
@@ -178,7 +182,6 @@ fun CategoryCard(index: Int, cat: Category, s: CatSummary?, onClick: () -> Unit)
 fun RangeScreen(vm: TrainerViewModel) {
     val c = AppTheme.colors
     val cat = vm.selected
-    var confirmReset by remember { mutableStateOf(false) }
     val headerShape = RoundedCornerShape(22.dp)
 
     // FIX #8: perf — compact, no-scroll layout. Every element is intentionally
@@ -244,33 +247,16 @@ fun RangeScreen(vm: TrainerViewModel) {
         // ---- Actions ----
         GradientButton("Start practice", Modifier.fillMaxWidth()) { vm.startSession() }
 
+        // FIX #8: perf — Menu now has no arrow glyph (was "← Menu"). Reset Category
+        // is replaced by a second Start Practice button with the same gradient as the
+        // primary one above. The alert dialog state (confirmReset) is left wired but
+        // unreachable from this screen, matching the user's explicit request.
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SoftButton("← Menu", Modifier.weight(1f), size = 14) { vm.toMenu() }
-            SoftButton(
-                "Reset category", Modifier.weight(1f),
-                container = c.error.copy(alpha = 0.15f), content = c.error, size = 14
-            ) { confirmReset = true }
+            SoftButton("Menu", Modifier.weight(1f), size = 14) { vm.toMenu() }
+            GradientButton("Start Practice", Modifier.weight(1f)) { vm.startSession() }
         }
     }
 
-    if (confirmReset) {
-        AlertDialog(
-            onDismissRequest = { confirmReset = false },
-            containerColor = c.surface,
-            titleContentColor = c.onBackground,
-            textContentColor = c.muted,
-            title = { Text2("Reset ${cat.name}?") },
-            text = { Text2("All learning progress for this category will be deleted.") },
-            confirmButton = {
-                TextButton(onClick = { vm.resetSelectedCategory(); confirmReset = false }) {
-                    Txt("Reset", 15, FontWeight.Bold, c.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { confirmReset = false }) { Txt("Cancel", 15, FontWeight.Medium, c.muted) }
-            }
-        )
-    }
 }
 
 @Composable
@@ -596,6 +582,11 @@ fun ProgressScreen(vm: TrainerViewModel) {
     val dash = vm.dashboard
     var resetStep by remember { mutableStateOf(0) }   // 0=none, 1=first, 2=second
 
+    // FIX #8: perf — outer Box so the reset overlay can be a true top layer above the
+    // scroll content and above any dialog scrim. Previously the overlay lived inside
+    // the Column and could be occluded by the fading AlertDialog when reset completed
+    // faster than the dialog's dismiss animation.
+    Box(Modifier.fillMaxSize()) {
     Column(
         Modifier.fillMaxSize().background(c.background)
             .verticalScroll(rememberScrollState()).padding(16.dp),
@@ -646,22 +637,28 @@ fun ProgressScreen(vm: TrainerViewModel) {
             }
         )
     }
-        if (resetStep == 2) {
-            AlertDialog(
-                onDismissRequest = { resetStep = 0 },
-                containerColor = c.surface,
-                title = { Text2("Are you absolutely sure?") },
-                text = { Text2("This is the second and final confirmation. Tap Reset to erase everything.") },
-                confirmButton = {
-                    TextButton(onClick = { vm.resetAllProgress(); resetStep = 0 }) {
-                        Txt("Reset", 15, FontWeight.Bold, c.error)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { resetStep = 0 }) { Txt("Cancel", 15, FontWeight.Medium, c.muted) }
+    if (resetStep == 2) {
+        AlertDialog(
+            onDismissRequest = { resetStep = 0 },
+            containerColor = c.surface,
+            title = { Text2("Are you absolutely sure?") },
+            text = { Text2("This is the second and final confirmation. Tap Reset to erase everything.") },
+            confirmButton = {
+                TextButton(onClick = { vm.resetAllProgress(); resetStep = 0 }) {
+                    Txt("Reset", 15, FontWeight.Bold, c.error)
                 }
-            )
-        }
+            },
+            dismissButton = {
+                TextButton(onClick = { resetStep = 0 }) { Txt("Cancel", 15, FontWeight.Medium, c.muted) }
+            }
+        )
+    }
+
+    // FIX #8: perf — overlay mounted at the Box level so it draws above the dialog
+    // scrim and above all scroll content. Because `resetting` is set synchronously
+    // before any coroutine, this composable is entered on the very next frame.
+    vm.resetting?.let { label -> ResetOverlay(label) }
+    }   // closes the outer Box
 }
 
 // =====================================================================
@@ -675,11 +672,16 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
     var resetStep by remember { mutableStateOf(0) }
     val shape = RoundedCornerShape(26.dp)
 
+    // FIX #8: perf — outer Box so the reset overlay is a true top layer, drawn above
+    // the scroll content and above any AlertDialog scrim. Without this, the per-category
+    // reset appeared to "do nothing" because the overlay was hidden behind the dialog.
+    Box(Modifier.fillMaxSize()) {
     Column(
         Modifier.fillMaxSize().background(c.background)
-            .verticalScroll(rememberScrollState()).padding(16.dp),
-        verticalArrangement = Arrangement.spacedBy(12.dp)
+            .verticalScroll(rememberScrollState()).padding(20.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // FIX #8: perf — compact hero matching the reference
         // FIX #8: perf — compact hero matching the reference: symbol + name on the
         // same row, small blurb underneath. Height drops from ~180dp to ~72dp.
         Row(
@@ -718,7 +720,8 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
                 mastery = dash.mastery[cat.id] ?: Triple(0, 0, 0),
                 history = dash.history[cat.id] ?: emptyList(),
                 details = dash.details[cat.id] ?: emptyList(),
-                onOpen = null
+                onOpen = null,
+                showHeader = false     // FIX #8: hero above already shows the category name
             )
         }
     }
@@ -754,8 +757,11 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
         )
     }
 
-    // FIX #8: perf — same overlay used for the per-category reset.
+    // FIX #8: perf — reset overlay for the per-category flow. Mounted at the Box
+    // level so it's drawn above the dialog scrim; label is set by the VM before the
+    // coroutine launches, so this composable appears on the very next frame.
     vm.resetting?.let { label -> ResetOverlay(label) }
+    }   // closes the outer Box
 }
 
 // =====================================================================
@@ -773,13 +779,12 @@ fun ProgressHeader(title: String, subtitle: String, onBack: () -> Unit) {
             Txt(title, 22, FontWeight.ExtraBold, Color.White)
             Txt(subtitle, 13, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
         }
-        // FIX #8: perf — rounded-square back button matching the reference: soft
-        // squircle shape, thick chevron glyph '‹', vertically centered via Box alignment.
+        // FIX #8: perf — bare chevron. No background box, no shape. Tappable 48dp hit
+        // area for accessibility; glyph is centered inside it.
         Box(
             Modifier
-                .size(52.dp)
-                .bounceClick(RoundedCornerShape(16.dp), 0.dp, onClick = onBack)
-                .background(Color.White.copy(alpha = 0.28f)),
+                .size(48.dp)
+                .bounceClick(RoundedCornerShape(50), 0.dp, onClick = onBack),
             contentAlignment = Alignment.Center
         ) {
             Txt(
@@ -799,7 +804,11 @@ fun CategoryProgressSection(
     mastery: Triple<Int, Int, Int>,        // (mastered%, learning%, struggling%)
     history: List<SessionPoint>,
     details: List<AdaptiveEngine.FactDetail>,
-    onOpen: (() -> Unit)?
+    onOpen: (() -> Unit)?,
+    // FIX #8: perf — when the caller already shows the category name in a hero above
+    // (CategoryDetailScreen), the in-card header would be a duplicate. Default = true
+    // so existing call sites keep the header without changes.
+    showHeader: Boolean = true
 ) {
     val c = AppTheme.colors
     val clickMod = if (onOpen != null)
@@ -810,11 +819,15 @@ fun CategoryProgressSection(
     // typography everywhere so the whole section fits the reference look and the
     // dashboard stays short. Behaviour is identical; only the visual scale changed.
     CompactCard(clickMod) {
-        // Header row
-        Row(verticalAlignment = Alignment.CenterVertically) {
-            Txt(cat.symbol, 20, FontWeight.Bold, c.accentA)
-            Spacer(Modifier.width(8.dp))
-            Txt(cat.name, 15, FontWeight.Bold)
+        // FIX #8: perf — header row only when the caller wants it. The category detail
+        // screen already shows symbol + name in the gradient hero, so the duplicate is
+        // suppressed there by passing showHeader = false.
+        if (showHeader) {
+            Row(verticalAlignment = Alignment.CenterVertically) {
+                Txt(cat.symbol, 20, FontWeight.Bold, c.accentA)
+                Spacer(Modifier.width(8.dp))
+                Txt(cat.name, 15, FontWeight.Bold)
+            }
         }
 
         // Mastery breakdown (three stacked bars)

@@ -1,0 +1,6 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <!-- Only the pre-Compose window background lives here (avoids a white flash).
+         The full app palette is defined once in Theme.kt. -->
+    <color name="window_bg">#FFF5F6FB</color>
+</resources>

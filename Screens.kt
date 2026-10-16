@@ -753,16 +753,22 @@ fun ProgressHeader(title: String, subtitle: String, onBack: () -> Unit) {
             Txt(title, 22, FontWeight.ExtraBold, Color.White)
             Txt(subtitle, 13, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
         }
-        // FIX #8: perf — square back button with a bold, vertically-centered arrow.
-        // SoftButton's asymmetric padding + pill shape made the ← look off-center and thin.
+        // FIX #8: perf — rounded-square back button matching the reference: soft
+        // squircle shape, thick chevron glyph '‹', vertically centered via Box alignment.
         Box(
             Modifier
-                .size(44.dp)
-                .bounceClick(CircleShape, 0.dp, onClick = onBack)
+                .size(52.dp)
+                .bounceClick(RoundedCornerShape(16.dp), 0.dp, onClick = onBack)
                 .background(Color.White.copy(alpha = 0.22f)),
             contentAlignment = Alignment.Center
         ) {
-            Txt("←", 22, FontWeight.Bold, Color.White, align = TextAlign.Center)
+            Txt(
+                "‹",
+                34,
+                FontWeight.Bold,
+                Color.White,
+                align = TextAlign.Center
+            )
         }
     }
 }

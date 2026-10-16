@@ -292,13 +292,15 @@ fun TrendChart(
     modifier: Modifier = Modifier
 ) {
     if (history.size < 2) {
+        // FIX #8: perf — compact empty state (was 160dp; the tall box dominated the
+        // dashboard card when there was no data yet).
         Box(
-            modifier.fillMaxWidth().height(160.dp)
-                .clip(RoundedCornerShape(18.dp))
+            modifier.fillMaxWidth().height(96.dp)
+                .clip(RoundedCornerShape(14.dp))
                 .background(Color(0xFF1B2233)),
             contentAlignment = Alignment.Center
         ) {
-            Txt("Practice more to see your trend", 13, FontWeight.Medium, Color.White.copy(alpha = 0.6f))
+            Txt("Practice more to see your trend", 12, FontWeight.Medium, Color.White.copy(alpha = 0.6f))
         }
         return
     }
@@ -318,8 +320,8 @@ fun TrendChart(
     Canvas(
         modifier
             .fillMaxWidth()
-            .height(220.dp)
-            .clip(RoundedCornerShape(18.dp))
+            .height(160.dp)
+            .clip(RoundedCornerShape(14.dp))
             .background(panel)
             .padding(12.dp)
     ) {

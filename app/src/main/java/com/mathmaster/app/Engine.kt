@@ -90,7 +90,45 @@ class Store(context: Context) {
     }
 
     fun clearCategory(cat: String) {
-        prefs.edit().remove("stats_$cat").remove("win_$cat").apply()
+        prefs.edit().remove("stats_$cat").remove("win_$cat").remove("hist_$cat").apply()
+    }
+
+    // FIX #8: perf — one-time migration of the old "powers" key. Powers of 2 and 3
+    // used to share a single stats bucket; after splitting them into two categories,
+    // the old bucket is renamed to "powers2" so existing progress is preserved.
+    // Runs once; a marker flag prevents re-migration on subsequent launches.
+    fun migratePowersSplit() {
+        if (prefs.getBoolean("migrated_powers_split", false)) return
+        val hasOld = prefs.contains("stats_powers") ||
+                     prefs.contains("win_powers") ||
+                     prefs.contains("hist_powers")
+        if (hasOld) {
+            // Copy old keys to their "powers2" slots (do not overwrite if new exists).
+            if (!prefs.contains("stats_powers2")) {
+                prefs.getString("stats_powers", null)?.let {
+                    prefs.edit().putString("stats_powers2", it).apply()
+                }
+            }
+            if (!prefs.contains("win_powers2")) {
+                prefs.getString("win_powers", null)?.let {
+                    prefs.edit().putString("win_powers2", it).apply()
+                }
+            }
+            if (!prefs.contains("hist_powers2")) {
+                prefs.getString("hist_powers", null)?.let {
+                    prefs.edit().putString("hist_powers2", it).apply()
+                }
+            }
+            prefs.edit()
+                .remove("stats_powers")
+                .remove("win_powers")
+                .remove("hist_powers")
+                .remove("set_powers")
+                .putBoolean("migrated_powers_split", true)
+                .apply()
+        } else {
+            prefs.edit().putBoolean("migrated_powers_split", true).apply()
+        }
     }
 
         // FIX #8: perf — history is capped at the last 30 sessions to keep reads tiny.

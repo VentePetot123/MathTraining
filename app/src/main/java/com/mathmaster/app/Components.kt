@@ -112,7 +112,7 @@ fun GradientButton(
             .alpha(if (enabled) 1f else 0.5f)
             .bounceClick(shape, 8.dp, enabled = enabled, onClick = onClick)
             .background(brush)
-            .padding(horizontal = 24.dp, vertical = 15.dp),
+            .padding(horizontal = 20.dp, vertical = 12.dp),
         contentAlignment = Alignment.Center
     ) {
         Txt(text, 17, FontWeight.Bold, Color.White)
@@ -132,11 +132,32 @@ fun SoftButton(
         modifier
             .bounceClick(RoundedCornerShape(14.dp), 0.dp, onClick = onClick)
             .background(container)
-            .padding(horizontal = 18.dp, vertical = 12.dp),
+            .padding(horizontal = 14.dp, vertical = 9.dp),
         contentAlignment = Alignment.Center
     ) {
         Txt(text, size, FontWeight.SemiBold, content)
     }
+}
+
+// FIX #8: perf — compact variant for the range screen so both config cards
+// (Number range + Questions) fit on-screen with no vertical scroll.
+@Composable
+fun CompactCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val shape = RoundedCornerShape(18.dp)
+    Column(
+        modifier
+            .fillMaxWidth()
+            .shadow(
+                elevation = 4.dp, shape = shape, clip = false,
+                ambientColor = Color.Black.copy(alpha = 0.08f),
+                spotColor = Color.Black.copy(alpha = 0.12f)
+            )
+            .clip(shape)
+            .background(AppTheme.colors.surface)
+            .padding(horizontal = 14.dp, vertical = 12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp),
+        content = content
+    )
 }
 
 @Composable
@@ -253,10 +274,10 @@ fun FeedbackMark(correct: Boolean, seq: Int, modifier: Modifier = Modifier) {
 fun Stepper(label: String, value: Int, step: Int, onChange: (Int) -> Unit) {
     val c = AppTheme.colors
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Txt(label, 16, FontWeight.Medium, c.muted, Modifier.weight(1f))
-        RoundButton("−") { onChange(value - step) }
-        Txt(value.toString(), 22, FontWeight.Bold, c.onBackground, Modifier.width(72.dp), TextAlign.Center)
-        RoundButton("+") { onChange(value + step) }
+        Txt(label, 13, FontWeight.Medium, c.muted, Modifier.weight(1f))
+        RoundButtonSmall("−") { onChange(value - step) }
+        Txt(value.toString(), 18, FontWeight.Bold, c.onBackground, Modifier.width(52.dp), TextAlign.Center)
+        RoundButtonSmall("+") { onChange(value + step) }
     }
 }
 
@@ -377,5 +398,20 @@ fun RoundButton(text: String, onClick: () -> Unit) {
         contentAlignment = Alignment.Center
     ) {
         Txt(text, 22, FontWeight.Bold, AppTheme.colors.onBackground)
+    }
+}
+
+// FIX #8: perf — compact variant used by the range screen so its rows fit without
+// growing the layout. Same visual language, smaller footprint.
+@Composable
+fun RoundButtonSmall(text: String, onClick: () -> Unit) {
+    Box(
+        Modifier
+            .size(34.dp)
+            .bounceClick(CircleShape, 2.dp, onClick = onClick)
+            .background(AppTheme.colors.surfaceAlt),
+        contentAlignment = Alignment.Center
+    ) {
+        Txt(text, 16, FontWeight.Bold, AppTheme.colors.onBackground)
     }
 }

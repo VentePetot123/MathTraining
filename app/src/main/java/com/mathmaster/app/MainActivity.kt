@@ -53,10 +53,13 @@ fun AppRoot(vm: TrainerViewModel) {
             targetState = vm.screen,
             transitionSpec = {
                 val forward = targetState.ordinal > initialState.ordinal
-                (slideInHorizontally(animationSpec = tween(380)) { w -> if (forward) w / 3 else -w / 3 } +
-                    fadeIn(tween(380))) togetherWith
-                    (slideOutHorizontally(animationSpec = tween(380)) { w -> if (forward) -w / 3 else w / 3 } +
-                        fadeOut(tween(250)))
+                // FIX #8: perf — shortened from 380ms to 240ms and reduced slide offset
+                // so the menu appears before the loading fade completes and card layout
+                // settles on the first visible frame.
+                (slideInHorizontally(animationSpec = tween(240)) { w -> if (forward) w / 4 else -w / 4 } +
+                    fadeIn(tween(240))) togetherWith
+                    (slideOutHorizontally(animationSpec = tween(240)) { w -> if (forward) -w / 4 else w / 4 } +
+                        fadeOut(tween(180)))
             },
             label = "screens"
         ) { s ->

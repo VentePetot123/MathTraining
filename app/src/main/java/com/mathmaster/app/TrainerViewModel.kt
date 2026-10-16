@@ -70,6 +70,12 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var showQuit by mutableStateOf(false)
 
+    // FIX #8: perf — countdown gate for a new session. While non-null, the training
+    // screen renders a scrim + "Ready/Set/Solve!" and no question is shown yet.
+    // Set to null when the countdown finishes so the overlay leaves NO trace.
+    var countdown by mutableStateOf<String?>(null)
+        private set
+
         // FIX #8: perf — dashboard data loaded off the main thread and cached here.
     data class DashboardData(
         val mastery: Map<String, Triple<Int, Int, Int>>,
@@ -78,8 +84,15 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     )
     var dashboard by mutableStateOf<DashboardData?>(null)
         private set
+    // FIX #8: perf — dashboard loading state, so the screen can show a progress bar
+    // instead of freezing on a static "Loading…" label.
+    var dashboardLoading by mutableStateOf(false)
+        private set
 
     fun loadDashboard() {
+        // FIX #8: perf — mark loading so the UI can render a progress bar; clear
+        // the flag only after the new dashboard snapshot is committed.
+        dashboardLoading = true
         viewModelScope.launch {
             val data = withContext(Dispatchers.IO) {
                 val mastery = Categories.all.associate { it.id to engine.mastery(it.id) }
@@ -88,6 +101,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
                 DashboardData(mastery, history, details)
             }
             dashboard = data
+            dashboardLoading = false
         }
     }
 
@@ -143,6 +157,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
 
     fun toMenu() {
         advanceJob?.cancel()
+        countdown = null          // FIX #8: kill any in-flight countdown overlay
         showQuit = false
         engine.flush()
         refreshMenu()
@@ -184,16 +199,23 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         engine.reset(selected.id)
         refreshMenu()
         dashboard = null
+        loadDashboard()          // FIX #8: reload so the dashboard doesn't stay frozen
     }
 
     // FIX #8: perf — wipe all categories; called only after 2 explicit confirmations.
+    // The reset runs on IO, then the dashboard is reloaded on the same coroutine so
+    // the UI shows a bar until the fresh (empty) snapshot is ready.
     fun resetAllProgress() {
-        viewModelScope.launch(Dispatchers.IO) {
-            Categories.all.forEach { engine.reset(it.id) }
-            engine.flush()
-        }
         dashboard = null
+        dashboardLoading = true
         refreshMenu()
+        viewModelScope.launch {
+            withContext(Dispatchers.IO) {
+                Categories.all.forEach { engine.reset(it.id) }
+                engine.flush()
+            }
+            loadDashboard()      // FIX #8: single source of truth for populating the dashboard
+        }
     }
 
     // ---------- session ----------
@@ -231,7 +253,17 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         results = null
         showQuit = false
         screen = Screen.Training
-        nextQuestion()
+
+        // FIX #8: perf — hold the first question behind a short Ready/Set/Solve!
+        // countdown so the user has a beat before the answer section appears.
+        countdown = "Ready"
+        viewModelScope.launch {
+            delay(600); countdown = "Set"
+            delay(600); countdown = "Solve!"
+            delay(500)
+            countdown = null          // clears the overlay — no residual scrim/layer
+            nextQuestion()
+        }
     }
 
     private fun nextQuestion() {

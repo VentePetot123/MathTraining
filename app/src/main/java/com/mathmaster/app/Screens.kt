@@ -71,9 +71,12 @@ fun LoadingScreen(vm: TrainerViewModel) {
         coroutineScope {
             launch { logoScale.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 200f)) }
             val preload = async { vm.preload() }
-            progress.animateTo(1f, tween(1800, easing = LinearEasing))
+            // FIX #8: perf — 1800ms was an artificial wait; 900ms still covers a cold
+            // first preload on slower devices (preload.await() blocks until done) while
+            // cutting the perceived lag roughly in half.
+            progress.animateTo(1f, tween(900, easing = LinearEasing))
             preload.await()
-            delay(150)
+            delay(80)
             vm.finishLoading()
         }
     }
@@ -98,9 +101,15 @@ fun LoadingScreen(vm: TrainerViewModel) {
 @Composable
 fun MenuScreen(vm: TrainerViewModel) {
     val c = AppTheme.colors
+    // FIX #8: perf — one fade for the whole menu instead of per-card staggers.
+    val appear = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, tween(280)) }
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
-        modifier = Modifier.fillMaxSize().background(c.background),
+        modifier = Modifier
+            .fillMaxSize()
+            .background(c.background)
+            .graphicsLayer { alpha = appear.value },
         contentPadding = PaddingValues(16.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -123,7 +132,8 @@ fun MenuHeader(vm: TrainerViewModel, onOpenProgress: () -> Unit) {
             .shadow(10.dp, shape)
             .clip(shape)
             .background(AppTheme.colors.accent)
-            .bounceClick(shape, 10.dp, onClick = onOpenProgress)   // FIX #8: tap → dashboard
+            .bounceClick(shape, 0.dp, onClick = onOpenProgress)   // FIX #8: no second shadow layer
+            .clip(shape)
             .padding(22.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
@@ -138,30 +148,24 @@ fun MenuHeader(vm: TrainerViewModel, onOpenProgress: () -> Unit) {
 
 @Composable
 fun CategoryCard(index: Int, cat: Category, s: CatSummary?, onClick: () -> Unit) {
-    var visible by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        delay(index * 50L)
-        visible = true
-    }
-    AnimatedVisibility(
-        visible = visible,
-        enter = fadeIn(tween(350)) + slideInVertically(tween(350)) { it / 5 }
+    // FIX #8: perf — removed the per-card LaunchedEffect(delay(index*50)) + AnimatedVisibility
+    // stagger. Nine parallel coroutines each triggering an enter transition inside a
+    // LazyVerticalGrid while the loading screen is still cross-fading caused dropped
+    // frames. Cards now render instantly; a single fade on the whole grid handles polish.
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .height(132.dp)
+            .bounceClick(RoundedCornerShape(22.dp), 8.dp, onClick = onClick)
+            .background(Brush.linearGradient(listOf(cat.colorA, cat.colorB)))
+            .padding(16.dp)
     ) {
-        Box(
-            Modifier
-                .fillMaxWidth()
-                .height(132.dp)
-                .bounceClick(RoundedCornerShape(22.dp), 8.dp, onClick = onClick)
-                .background(Brush.linearGradient(listOf(cat.colorA, cat.colorB)))
-                .padding(16.dp)
-        ) {
-            Txt(cat.symbol, 30, FontWeight.Bold, Color.White, Modifier.align(Alignment.TopStart))
-            Column(Modifier.align(Alignment.BottomStart)) {
-                Txt(cat.name, 15, FontWeight.Bold, Color.White)
-                val stat = if (s == null || s.attempts == 0) "Not practiced yet"
-                else "${s.accuracyPct}% acc · ${s.facts} facts"
-                Txt(stat, 11, FontWeight.Medium, Color.White.copy(alpha = 0.85f))
-            }
+        Txt(cat.symbol, 30, FontWeight.Bold, Color.White, Modifier.align(Alignment.TopStart))
+        Column(Modifier.align(Alignment.BottomStart)) {
+            Txt(cat.name, 15, FontWeight.Bold, Color.White)
+            val stat = if (s == null || s.attempts == 0) "Not practiced yet"
+            else "${s.accuracyPct}% acc · ${s.facts} facts"
+            Txt(stat, 11, FontWeight.Medium, Color.White.copy(alpha = 0.85f))
         }
     }
 }
@@ -174,63 +178,76 @@ fun RangeScreen(vm: TrainerViewModel) {
     val c = AppTheme.colors
     val cat = vm.selected
     var confirmReset by remember { mutableStateOf(false) }
-    val headerShape = RoundedCornerShape(26.dp)
+    val headerShape = RoundedCornerShape(22.dp)
 
+    // FIX #8: perf — compact, no-scroll layout. Every element is intentionally
+    // smaller than the shared variants so the whole screen fits on a mid-range
+    // phone without vertical scroll.
     Column(
         Modifier
             .fillMaxSize()
             .background(c.background)
-            .verticalScroll(rememberScrollState())
-            .padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .verticalScroll(rememberScrollState())   // no-op when content fits
+            .padding(horizontal = 16.dp, vertical = 14.dp),
+        verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
-        Column(
+        // ---- Compact gradient header ----
+        Row(
             Modifier
                 .fillMaxWidth()
-                .shadow(10.dp, headerShape)
+                .shadow(6.dp, headerShape)
                 .clip(headerShape)
                 .background(Brush.linearGradient(listOf(cat.colorA, cat.colorB)))
-                .padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
+                .padding(horizontal = 14.dp, vertical = 12.dp),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Txt(cat.symbol, 40, FontWeight.Bold, Color.White)
-            Txt(cat.name, 26, FontWeight.ExtraBold, Color.White)
-            Txt(cat.blurb, 14, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
+            Txt(cat.symbol, 26, FontWeight.Bold, Color.White)
+            Spacer(Modifier.width(12.dp))
+            Column(Modifier.weight(1f)) {
+                Txt(cat.name, 18, FontWeight.ExtraBold, Color.White)
+                Txt(cat.blurb, 11, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
+            }
         }
 
-        AppCard {
-            Txt(if (cat.usesFractionKeys) "Denominator range" else "Number range", 18, FontWeight.Bold)
+        // ---- Number range card ----
+        CompactCard {
+            Txt(if (cat.usesFractionKeys) "Denominator range" else "Number range", 15, FontWeight.Bold)
             Stepper("From", vm.rangeMin, 1) { vm.setMin(it) }
             Stepper("To", vm.rangeMax, 1) { vm.setMax(it) }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 cat.presets().forEach { (a, b) ->
-                    SoftButton("$a–$b", Modifier.weight(1f), size = 14) { vm.applyPreset(a, b) }
+                    SoftButton("$a–$b", Modifier.weight(1f), size = 12) { vm.applyPreset(a, b) }
                 }
             }
         }
 
-        AppCard {
-            Txt("Questions per session", 18, FontWeight.Bold)
+        // ---- Questions per session card ----
+        CompactCard {
+            Txt("Questions per session", 15, FontWeight.Bold)
             Stepper("Questions", vm.questionCount, 5) { vm.setCount(it) }
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf(10, 20, 30, 50).forEach { n ->
-                    SoftButton("$n", Modifier.weight(1f), size = 14) { vm.setCount(n) }
+                    SoftButton("$n", Modifier.weight(1f), size = 12) { vm.setCount(n) }
                 }
             }
         }
 
+        // ---- Compact stat line ----
         val s = vm.menuStats[cat.id]
         val statText = if (s == null || s.attempts == 0) "No practice data yet for this category"
         else "${s.attempts} attempts · ${s.accuracyPct}% accuracy · ${s.facts} facts practiced"
-        Txt(statText, 13, FontWeight.Medium, c.muted, Modifier.fillMaxWidth(), TextAlign.Center)
+        Txt(statText, 11, FontWeight.Medium, c.muted, Modifier.fillMaxWidth(), TextAlign.Center)
 
+        Spacer(Modifier.weight(1f))   // FIX #8: perf — absorbs slack so buttons pin to bottom
+
+        // ---- Actions ----
         GradientButton("Start practice", Modifier.fillMaxWidth()) { vm.startSession() }
 
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            SoftButton("← Menu", Modifier.weight(1f)) { vm.toMenu() }
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+            SoftButton("← Menu", Modifier.weight(1f), size = 14) { vm.toMenu() }
             SoftButton(
                 "Reset category", Modifier.weight(1f),
-                container = c.error.copy(alpha = 0.15f), content = c.error
+                container = c.error.copy(alpha = 0.15f), content = c.error, size = 14
             ) { confirmReset = true }
         }
     }
@@ -271,7 +288,11 @@ fun TrainingScreen(vm: TrainerViewModel) {
     }
     val cat = Categories.byId(u.categoryId)
 
-    Column(Modifier.fillMaxSize().background(c.background)) {
+    // FIX #8: perf — wrap the training UI in a Box so we can layer the countdown
+    // overlay on top. The overlay composable is only invoked while countdown != null;
+    // once it clears, Compose disposes it completely with no residual scrim or layer.
+    Box(Modifier.fillMaxSize()) {
+        Column(Modifier.fillMaxSize().background(c.background)) {
         Row(
             Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
@@ -338,6 +359,11 @@ fun TrainingScreen(vm: TrainerViewModel) {
             }
         )
     }
+
+        // FIX #8: perf — countdown overlay. Composed only while countdown != null,
+        // so when it clears there is no scrim, blur, or layer left behind.
+        vm.countdown?.let { CountdownOverlay(it) }
+    }   // ← closes the Box
 }
 
 @Composable
@@ -412,14 +438,27 @@ fun QuestionCard(u: UiSession) {
         Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) {
             when (u.feedback) {
                 // FIX #12: unified feedback strip — shown for every category, same format.
-                // Correct → ✔ <answer> <time>s ; Wrong → ✘ <answer> <time>s
-                Feedback.Correct -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                // The animated FeedbackMark (Canvas) is the ONLY symbol; the text is
+                // just "<answer> <time>s" so we don't render a duplicate Unicode glyph.
+                Feedback.Correct -> Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     FeedbackMark(true, u.seq)
-                    Txt("✔ " + fact.answer + "  " + String.format(Locale.US, "%.1f", u.lastMs / 1000.0) + "s", 18, FontWeight.Bold, c.success)
+                    Txt(
+                        fact.answer + "  " + String.format(Locale.US, "%.1f", u.lastMs / 1000.0) + "s",
+                        18, FontWeight.Bold, c.success
+                    )
                 }
-                Feedback.Wrong -> Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Feedback.Wrong -> Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(10.dp)
+                ) {
                     FeedbackMark(false, u.seq)
-                    Txt("✘ " + fact.answer + "  " + String.format(Locale.US, "%.1f", u.lastMs / 1000.0) + "s", 18, FontWeight.Bold, c.error)
+                    Txt(
+                        fact.answer + "  " + String.format(Locale.US, "%.1f", u.lastMs / 1000.0) + "s",
+                        18, FontWeight.Bold, c.error
+                    )
                 }
                 Feedback.None -> if (u.hint != null) Txt(u.hint, 14, FontWeight.Medium, c.warning)
             }
@@ -566,10 +605,12 @@ fun ProgressScreen(vm: TrainerViewModel) {
             brush = Brush.linearGradient(listOf(c.error, c.error.copy(alpha = 0.7f)))
         ) { resetStep = 1 }
 
-        if (dash == null) {
-            Box(Modifier.fillMaxWidth().height(200.dp), contentAlignment = Alignment.Center) {
-                Txt("Loading…", 14, FontWeight.Medium, c.muted)
-            }
+        // FIX #8: perf — animated progress bar instead of a frozen "Loading…" label.
+        // While the dashboard snapshot is being computed on Dispatchers.IO, the bar
+        // fills with a gentle indeterminate motion; once the data arrives it's removed
+        // from composition entirely (no residual layer, no stutter on re-entry).
+        if (vm.dashboardLoading || dash == null) {
+            DashboardLoadingIndicator()
         } else {
             Categories.all.forEach { cat ->
                 CategoryProgressSection(
@@ -597,22 +638,22 @@ fun ProgressScreen(vm: TrainerViewModel) {
             }
         )
     }
-    if (resetStep == 2) {
-        AlertDialog(
-            onDismissRequest = { resetStep = 0 },
-            containerColor = c.surface,
-            title = { Text2("Are you absolutely sure?") },
-            text = { Text2("This is the second and final confirmation. Tap Reset to erase everything.") },
-            confirmButton = {
-                TextButton(onClick = { vm.resetAllProgress(); resetStep = 0 }) {
-                    Txt("Reset", 15, FontWeight.Bold, c.error)
+        if (resetStep == 2) {
+            AlertDialog(
+                onDismissRequest = { resetStep = 0 },
+                containerColor = c.surface,
+                title = { Text2("Are you absolutely sure?") },
+                text = { Text2("This is the second and final confirmation. Tap Reset to erase everything.") },
+                confirmButton = {
+                    TextButton(onClick = { vm.resetAllProgress(); resetStep = 0 }) {
+                        Txt("Reset", 15, FontWeight.Bold, c.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { resetStep = 0 }) { Txt("Cancel", 15, FontWeight.Medium, c.muted) }
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { resetStep = 0 }) { Txt("Cancel", 15, FontWeight.Medium, c.muted) }
-            }
-        )
-    }
+            )
+        }
 }
 
 // =====================================================================
@@ -650,10 +691,8 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
             content = c.error
         ) { resetStep = 1 }
 
-        if (dash == null) {
-            Box(Modifier.fillMaxWidth().height(120.dp), contentAlignment = Alignment.Center) {
-                Txt("Loading…", 14, FontWeight.Medium, c.muted)
-            }
+        if (vm.dashboardLoading || dash == null) {
+            DashboardLoadingIndicator()
         } else {
             CategoryProgressSection(
                 cat = cat,
@@ -712,7 +751,17 @@ fun ProgressHeader(title: String, subtitle: String, onBack: () -> Unit) {
             Txt(title, 22, FontWeight.ExtraBold, Color.White)
             Txt(subtitle, 13, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
         }
-        SoftButton("←", container = Color.White.copy(alpha = 0.2f), content = Color.White) { onBack() }
+        // FIX #8: perf — square back button with a bold, vertically-centered arrow.
+        // SoftButton's asymmetric padding + pill shape made the ← look off-center and thin.
+        Box(
+            Modifier
+                .size(44.dp)
+                .bounceClick(RoundedCornerShape, 0.dp, onClick = onBack)
+                .background(Color.White.copy(alpha = 0.22f)),
+            contentAlignment = Alignment.Center
+        ) {
+            Txt("←", 22, FontWeight.Bold, Color.White, align = TextAlign.Center)
+        }
     }
 }
 
@@ -824,4 +873,50 @@ private fun summarize(
     val strong = "strong on $best"
     val weak = "weak on $worst"
     return strong to weak
+}
+
+// FIX #8: perf — dashboard loading placeholder. A gradient progress bar that fills
+// from 0 → 90% over ~700ms and holds, then disappears when real data replaces it.
+// Uses graphicsLayer + a single Animatable, so it costs almost nothing per frame.
+@Composable
+fun DashboardLoadingIndicator() {
+    val c = AppTheme.colors
+    val shape = RoundedCornerShape(22.dp)
+    val fill = remember { Animatable(0f) }
+
+    LaunchedEffect(Unit) {
+        fill.animateTo(0.9f, tween(700, easing = FastOutSlowInEasing))
+    }
+
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .shadow(4.dp, shape)
+            .clip(shape)
+            .background(c.surface)
+            .padding(horizontal = 20.dp, vertical = 24.dp),
+        verticalArrangement = Arrangement.spacedBy(14.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
+    ) {
+        Txt("Loading progress…", 13, FontWeight.Medium, c.muted)
+
+        // Progress bar — same visual language as GradientProgressBar, but reads
+        // from the local Animatable so the value is stable across recompositions.
+        val pill = RoundedCornerShape(50)
+        Box(
+            Modifier
+                .fillMaxWidth()
+                .height(10.dp)
+                .clip(pill)
+                .background(c.surfaceAlt)
+        ) {
+            Box(
+                Modifier
+                    .fillMaxHeight()
+                    .fillMaxWidth(fill.value)
+                    .clip(pill)
+                    .background(c.accent)
+            )
+        }
+    }
 }

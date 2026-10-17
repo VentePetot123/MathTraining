@@ -362,7 +362,7 @@ fun Stepper(
 
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Txt(label, 13, FontWeight.Medium, c.muted, Modifier.weight(1f))
-        RoundButtonSmall("−") { onChange(nextDown(value)) }
+        RoundButtonSmallInstant("−") { onChange(nextDown(value)) }
         // Tap target for the value
         Box(
             Modifier
@@ -372,7 +372,7 @@ fun Stepper(
         ) {
             Txt(value.toString(), 18, FontWeight.Bold, c.onBackground, align = TextAlign.Center)
         }
-        RoundButtonSmall("+") { onChange(nextUp(value)) }
+        RoundButtonSmallInstant("+") { onChange(nextUp(value)) }
     }
 
     if (editing) {
@@ -544,6 +544,33 @@ fun RoundButtonSmall(text: String, onClick: () -> Unit) {
         contentAlignment = Alignment.Center
     ) {
         Txt(text, 16, FontWeight.Bold, AppTheme.colors.onBackground)
+    }
+}
+
+// FIX #8: perf — instant variant for steppers. Uses plain `clickable` (no debounce,
+// no animation). This allows rapid spam-tapping of +/− to update the value in real
+// time, exactly like a native counter. Uses a pressed-tint for visual feedback so it
+// still feels responsive, but the tint swap is instant.
+@Composable
+fun RoundButtonSmallInstant(text: String, onClick: () -> Unit) {
+    val c = AppTheme.colors
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val bg = if (pressed) c.surface else c.surfaceAlt
+    
+    Box(
+        Modifier
+            .size(34.dp)
+            .clip(CircleShape)
+            .clickable(
+                interactionSource = interaction,
+                indication = LocalIndication.current,
+                onClick = onClick
+            )
+            .background(bg),
+        contentAlignment = Alignment.Center
+    ) {
+        Txt(text, 16, FontWeight.Bold, c.onBackground)
     }
 }
 

@@ -8,6 +8,8 @@ import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
+import androidx.compose.animation.fadeIn
+import androidx.compose.animation.fadeOut
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
@@ -70,18 +72,30 @@ fun AppRoot(vm: TrainerViewModel) {
             AnimatedContent(
                 targetState = vm.screen,
                 transitionSpec = {
-                    val forward = targetState.ordinal > initialState.ordinal
-                    // FIX #8: perf — was slide + fade running simultaneously on both
-                    // incoming and outgoing screens. That's 4 channels of animation per
-                    // transition, each redrawing a full-screen layer. Trimmed to a single
-                    // slide (no fade) at 220ms. Looks identical to the eye, halves the
-                    // render work.
-                    slideInHorizontally(animationSpec = tween(220)) { w ->
-                        if (forward) w / 5 else -w / 5
-                    } togetherWith
-                        slideOutHorizontally(animationSpec = tween(220)) { w ->
-                            if (forward) -w / 5 else w / 5
-                        }
+                    // FIX #8: perf — for Menu ↔ Dashboard ↔ CategoryDetail (which mount
+                    // LazyVerticalGrids and compute Canvas charts), the slide transition
+                    // was allocating hundreds of KB per frame for two full screens. That
+                    // triggered a GC pause every ~15 taps, manifesting as a single
+                    // stutter mid-slide. For these routes we use a simple 140ms fade —
+                    // single incoming layer, minimal allocation, zero GC pressure.
+                    //
+                    // Other routes (Range, Training, Results) keep the slide since they
+                    // are lighter and the slide feels natural there.
+                    val heavyScreens = setOf(
+                        Screen.Menu, Screen.Progress, Screen.CategoryDetail
+                    )
+                    val useFade = targetState in heavyScreens || initialState in heavyScreens
+                    if (useFade) {
+                        fadeIn(tween(140)) togetherWith fadeOut(tween(140))
+                    } else {
+                        val forward = targetState.ordinal > initialState.ordinal
+                        slideInHorizontally(animationSpec = tween(220)) { w ->
+                            if (forward) w / 5 else -w / 5
+                        } togetherWith
+                            slideOutHorizontally(animationSpec = tween(220)) { w ->
+                                if (forward) -w / 5 else w / 5
+                            }
+                    }
                 },
                 label = "screens"
             ) { s ->

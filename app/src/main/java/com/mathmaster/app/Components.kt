@@ -47,7 +47,9 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.TextFieldValue
 import androidx.compose.ui.text.input.ImeAction
 import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.composed
@@ -510,14 +512,30 @@ fun NumberInputDialog(
     onConfirm: (Int) -> Unit
 ) {
     val c = AppTheme.colors
-    var buffer by remember { mutableStateOf(initial.toString()) }
+    // FIX #8: perf — track input as TextFieldValue so we can pin the cursor to the
+    // END of the digits. The `selection` field must be `length`, not 0 — otherwise
+    // the initial render puts the cursor before the first digit even with
+    // TextAlign.Center.
+    var textFieldValue by remember {
+        mutableStateOf(
+            TextFieldValue(
+                text = initial.toString(),
+                selection = TextRange(initial.toString().length)
+            )
+        )
+    }
     var maxDigitsTick by remember { mutableStateOf(0) }
     val focusRequester = remember { FocusRequester() }
 
-    // FIX #8: perf — open the soft keyboard automatically and put the caret at the
-    // end, so the user can start typing immediately without tapping the field.
+    // FIX #8: perf — request focus, then re-pin the selection after one frame. The
+    // framework sometimes resets selection to 0 when focus is granted; re-pinning
+    // guarantees the cursor sits to the RIGHT of the last digit.
     LaunchedEffect(Unit) {
         focusRequester.requestFocus()
+        kotlinx.coroutines.delay(16)
+        textFieldValue = textFieldValue.copy(
+            selection = TextRange(textFieldValue.text.length)
+        )
     }
 
     AlertDialog(
@@ -527,12 +545,10 @@ fun NumberInputDialog(
         textContentColor = c.muted,
         title = { Txt("Enter value (1–99)", 16, FontWeight.Bold) },
         text = {
-            // FIX #8: perf — split the visual into two layers:
-            //  1. A centered Text shows the digits (always dead-center).
-            //  2. A transparent BasicTextField sits on top for typing, with its text
-            //     color set to Transparent so only the cursor is visible. Its text is
-            //     right-aligned, which puts the blinking cursor at the far-right edge.
-            // The Box wraps both so the ripple / focus rectangle look like one field.
+            // FIX #8: — single BasicTextField, no overlay. Text is centered via
+            // TextAlign.Center; cursor sits at `selection.start` which we pin to
+            // `text.length` after every change, so it appears right after the last
+            // digit. When empty, `TextAlign.Center` shows the cursor in the middle.
             Box(
                 Modifier
                     .fillMaxWidth()
@@ -541,23 +557,21 @@ fun NumberInputDialog(
                     .background(c.surfaceAlt),
                 contentAlignment = Alignment.Center
             ) {
-                // Visible digits — centered, no cursor
-                Txt(
-                    if (buffer.isEmpty()) "—" else buffer,
-                    28,
-                    FontWeight.Bold,
-                    if (buffer.isEmpty()) c.muted else c.onBackground,
-                    align = TextAlign.Center
-                )
-                // Invisible overlay for actual input + cursor.
-                // Text color is transparent so only the blinking cursor shows; the
-                // text is right-aligned so the cursor rides the right edge of the field.
                 BasicTextField(
-                    value = buffer,
-                    onValueChange = { new ->
-                        val digitsOnly = new.filter { it.isDigit() }
+                    value = textFieldValue,
+                    onValueChange = { newValue ->
+                        val digitsOnly = newValue.text.filter { it.isDigit() }
                         when {
-                            digitsOnly.length <= 2 -> buffer = digitsOnly
+                            digitsOnly.length <= 2 -> {
+                                // Rebuild selection to stay at the end of the new
+                                // text. This keeps the cursor visually to the right
+                                // of the last digit at all times.
+                                textFieldValue = TextFieldValue(
+                                    text = digitsOnly,
+                                    selection = TextRange(digitsOnly.length),
+                                    composition = null
+                                )
+                            }
                             else -> maxDigitsTick++
                         }
                     },
@@ -568,16 +582,16 @@ fun NumberInputDialog(
                     ),
                     keyboardActions = KeyboardActions(
                         onDone = {
-                            val parsed = buffer.toIntOrNull()
+                            val parsed = textFieldValue.text.toIntOrNull()
                             if (parsed != null && parsed in 1..99) onConfirm(parsed)
                         }
                     ),
                     cursorBrush = SolidColor(c.accentA),
                     textStyle = TextStyle(
-                        color = Color.Transparent,
+                        color = c.onBackground,
                         fontSize = 28.sp,
                         fontWeight = FontWeight.Bold,
-                        textAlign = TextAlign.End
+                        textAlign = TextAlign.Center
                     ),
                     modifier = Modifier
                         .fillMaxWidth()
@@ -587,7 +601,7 @@ fun NumberInputDialog(
             }
         },
         confirmButton = {
-            val parsed = buffer.toIntOrNull()
+            val parsed = textFieldValue.text.toIntOrNull()
             val valid = parsed != null && parsed in 1..99
             TextButton(
                 onClick = { if (valid) onConfirm(parsed!!) },
@@ -617,9 +631,6 @@ fun NumberInputDialog(
                     usePlatformDefaultWidth = false
                 )
             ) {
-                // FIX #8: perf — reset the tick when the fade completes. This removes
-                // the Dialog from composition entirely, so the invisible alpha=0 touch
-                // blocker no longer overlaps the underlying input dialog.
                 MaxDigitsToast(onDismiss = { maxDigitsTick = 0 })
             }
         }

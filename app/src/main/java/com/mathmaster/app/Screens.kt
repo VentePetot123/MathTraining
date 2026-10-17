@@ -82,12 +82,15 @@ fun LoadingScreen(vm: TrainerViewModel) {
         coroutineScope {
             launch { logoScale.animateTo(1f, spring(dampingRatio = 0.5f, stiffness = 200f)) }
             val preload = async { vm.preload() }
-            // FIX #8: perf — 1800ms was an artificial wait; 900ms still covers a cold
-            // first preload on slower devices (preload.await() blocks until done) while
-            // cutting the perceived lag roughly in half.
-            progress.animateTo(1f, tween(900, easing = LinearEasing))
+            // FIX #8: perf — 1400ms gives the app time to fully warm up (JIT
+            // compilation, first-frame GPU allocation, menu stats load) BEFORE the
+            // Loading → Menu transition begins. This eliminates the tiny hitch that
+            // was showing up mid-slide on the very first transition after cold start.
+            // `preload.await()` still gates on real work; this is just an upper bound
+            // on how long we wait for the animation to look smooth.
+            progress.animateTo(1f, tween(1400, easing = LinearEasing))
             preload.await()
-            delay(80)
+            delay(120)
             vm.finishLoading()
         }
     }
@@ -112,14 +115,6 @@ fun LoadingScreen(vm: TrainerViewModel) {
 @Composable
 fun MenuScreen(vm: TrainerViewModel) {
     val c = AppTheme.colors
-    // FIX #8: perf — defer the heavy category card composition by two frames so the
-    // Loading→Menu transition renders smoothly.
-    var cardsReady by remember { mutableStateOf(false) }
-    LaunchedEffect(Unit) {
-        withFrameNanos { }
-        withFrameNanos { }
-        cardsReady = true
-    }
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         modifier = Modifier
@@ -130,10 +125,8 @@ fun MenuScreen(vm: TrainerViewModel) {
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) { MenuHeader(vm) { vm.openProgress() } }
-        if (cardsReady) {
-            itemsIndexed(Categories.all) { index, cat ->
-                CategoryCard(index, cat, vm.menuStats[cat.id]) { vm.openCategory(cat) }
-            }
+        itemsIndexed(Categories.all) { index, cat ->
+            CategoryCard(index, cat, vm.menuStats[cat.id]) { vm.openCategory(cat) }
         }
     }
 }
@@ -752,23 +745,17 @@ fun ProgressScreen(vm: TrainerViewModel) {
             }
         }
 
-        // FIX #8: perf — defer the heavy category-card grid until after the screen
-        // transition has rendered its first few frames. Without this, all 9 cards
-        // compose on the transition frame, and the resulting main-thread work blocks
-        // the fade, making it visibly stutter.
-        DeferredContent(key = "progress_cards") {
-            if (vm.dashboardLoading || dash == null) {
-                DashboardLoadingIndicator()
-            } else {
-                Categories.all.forEach { cat ->
-                    CategoryProgressSection(
-                        cat = cat,
-                        mastery = dash.mastery[cat.id] ?: Triple(0, 0, 0),
-                        history = dash.history[cat.id] ?: emptyList(),
-                        details = dash.details[cat.id] ?: emptyList(),
-                        onOpen = { vm.openCategoryDetail(cat) }
-                    )
-                }
+        if (dash == null) {
+            DashboardLoadingIndicator()
+        } else {
+            Categories.all.forEach { cat ->
+                CategoryProgressSection(
+                    cat = cat,
+                    mastery = dash.mastery[cat.id] ?: Triple(0, 0, 0),
+                    history = dash.history[cat.id] ?: emptyList(),
+                    details = dash.details[cat.id] ?: emptyList(),
+                    onOpen = { vm.openCategoryDetail(cat) }
+                )
             }
         }
     }
@@ -880,22 +867,17 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
             }
         }
 
-        // FIX #8: perf — defer the mastery card until the transition has rendered a
-        // few frames. Same reasoning as ProgressScreen: the card's Canvas chart +
-        // sorted lists were composing during the fade and blocking the animation.
-        DeferredContent(key = "category_detail_card") {
-            if (vm.dashboardLoading || dash == null) {
-                DashboardLoadingIndicator()
-            } else {
-                CategoryProgressSection(
-                    cat = cat,
-                    mastery = dash.mastery[cat.id] ?: Triple(0, 0, 0),
-                    history = dash.history[cat.id] ?: emptyList(),
-                    details = dash.details[cat.id] ?: emptyList(),
-                    onOpen = null,
-                    showHeader = false
-                )
-            }
+        if (dash == null) {
+            DashboardLoadingIndicator()
+        } else {
+            CategoryProgressSection(
+                cat = cat,
+                mastery = dash.mastery[cat.id] ?: Triple(0, 0, 0),
+                history = dash.history[cat.id] ?: emptyList(),
+                details = dash.details[cat.id] ?: emptyList(),
+                onOpen = null,
+                showHeader = false
+            )
         }
     }
 

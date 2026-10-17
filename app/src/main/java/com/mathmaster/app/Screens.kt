@@ -491,6 +491,19 @@ fun QuestionCard(u: UiSession) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+        // FIX #8 — show a small hint above the prompt for decimal questions
+        if (fact.kind == Kind.DEC) {
+            Txt(
+                "2 Decimal Places Only",
+                12,
+                FontWeight.Medium,
+                c.muted,
+                Modifier.fillMaxWidth(),
+                TextAlign.Center
+            )
+            Spacer(Modifier.height(4.dp))
+        }
+
         Txt(fact.prompt, promptSize, FontWeight.ExtraBold, c.onBackground, Modifier.fillMaxWidth(), TextAlign.Center)
 
         val borderColor = when (u.feedback) {
@@ -508,7 +521,7 @@ fun QuestionCard(u: UiSession) {
         Box(
             Modifier
                 .fillMaxWidth()
-                .heightIn(min = 64.dp)
+                .height(64.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(c.surfaceAlt)
                 .border(2.dp, borderColor, RoundedCornerShape(16.dp)),
@@ -517,9 +530,21 @@ fun QuestionCard(u: UiSession) {
             if (u.input.isEmpty()) {
                 Txt("?", 28, FontWeight.Bold, c.muted)
             } else {
+                // FIX #8 — dynamically shrink font size based on input length so long
+                // numbers (e.g., "0.333333333333") stay fully visible inside the box.
+                val fontSize = when {
+                    u.input.length <= 8 -> 30
+                    u.input.length <= 12 -> 24
+                    u.input.length <= 16 -> 20
+                    u.input.length <= 24 -> 16
+                    else -> 13
+                }
                 Txt(
-                    u.input, inputSize, FontWeight.Bold, c.onBackground,
-                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    u.input, 
+                    fontSize, 
+                    FontWeight.Bold, 
+                    c.onBackground, 
+                    Modifier.padding(horizontal = 8.dp),
                     TextAlign.Center
                 )
             }

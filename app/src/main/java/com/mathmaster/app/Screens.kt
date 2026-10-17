@@ -1081,31 +1081,36 @@ fun CategoryProgressSection(
             // Trend chart (empty state handled inside)
             TrendChart(history)
 
-            // FIX #8: perf — cache the sorted lists on the `details` reference.
+            // FIX #8: perf — partition into mutually exclusive buckets so the SAME
+            // fact can never appear in both Strengths and Weaknesses.
+            //   • strengths  = facts where correct > incorrect
+            //   • weaknesses = facts where incorrect >= correct
             val sortedByCorrect = remember(details) {
-                details.sortedWith(
-                    compareByDescending<AdaptiveEngine.FactDetail> { it.correct }
-                        .thenBy { it.avgMs }
-                )
+                details.filter { it.correct > it.incorrect }
+                    .sortedWith(
+                        compareByDescending<AdaptiveEngine.FactDetail> { it.correct - it.incorrect }
+                            .thenBy { it.avgMs }
+                    )
             }
             val sortedByWrong = remember(details) {
-                details.sortedWith(
-                    compareByDescending<AdaptiveEngine.FactDetail> { it.incorrect }
-                        .thenByDescending { it.lastSeen }
-                )
+                details.filter { it.incorrect > 0 && it.incorrect >= it.correct }
+                    .sortedWith(
+                        compareByDescending<AdaptiveEngine.FactDetail> { it.incorrect - it.correct }
+                            .thenByDescending { it.lastSeen }
+                    )
             }
 
-            if (sortedByCorrect.any { it.correct > 0 }) {
+            if (sortedByCorrect.isNotEmpty()) {
                 Txt("Strengths (detailed)", 11, FontWeight.SemiBold, c.muted)
-                sortedByCorrect.filter { it.correct > 0 }.take(5).forEach { d ->
+                sortedByCorrect.take(5).forEach { d ->
                     Txt("${d.key}  ✓${d.correct}  avg ${(d.avgMs / 1000.0).format1()}s",
                         11, FontWeight.Normal, c.onBackground)
                 }
             }
 
-            if (sortedByWrong.any { it.incorrect > 0 }) {
+            if (sortedByWrong.isNotEmpty()) {
                 Txt("Weaknesses (detailed)", 11, FontWeight.SemiBold, c.muted)
-                sortedByWrong.filter { it.incorrect > 0 }.take(5).forEach { d ->
+                sortedByWrong.take(5).forEach { d ->
                     Txt("${d.key}  ✗${d.incorrect}  avg ${(d.avgMs / 1000.0).format1()}s",
                         11, FontWeight.Normal, c.onBackground)
                 }

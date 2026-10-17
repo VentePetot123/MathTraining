@@ -362,7 +362,7 @@ fun Stepper(label: String, value: Int, step: Int, onChange: (Int) -> Unit) {
 
 // FIX #8: perf — Compose-native trend chart. Draws in a single Canvas pass; no
 // per-frame allocations (paths and gradients are remembered on the input data).
-//   • teal line  = accuracy % (y 0..100)
+//   • teal line  = accuracy % (y 0..180 as required by spec)
 //   • pink line  = inverse-scaled avg response time (lower ms → higher y)
 //   • cubic-bezier smoothing, filled gradient below each line, no point markers.
 @Composable
@@ -388,6 +388,7 @@ fun TrendChart(
     val grid = Color.White.copy(alpha = 0.06f)
     val teal = Color(0xFF3DD9A0)
     val pink = Color(0xFFE64C8A)
+    val axis = Color.White.copy(alpha = 0.55f)
 
     val accuracy = remember(history) { history.map { it.accuracyPct.toFloat().coerceIn(0f, 100f) } }
     val times = remember(history) {
@@ -396,81 +397,82 @@ fun TrendChart(
     }
 
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-        Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-            Txt("● Accuracy", 11, FontWeight.SemiBold, teal)
-            Txt("● Speed (higher = faster)", 11, FontWeight.SemiBold, pink)
-        }
-        Canvas(
-            Modifier
-                .fillMaxWidth()
-                .height(160.dp)
-                .clip(RoundedCornerShape(14.dp))
-                .background(panel)
-                .padding(12.dp)
-        ) {
-            val w = size.width
-            val h = size.height
-            val left = 4.dp.toPx()
-            val bottom = 20.dp.toPx()
-            val plotW = w - left
-            val plotH = h - bottom
-
-            // Y grid: 10 ticks over 0..100
-            for (i in 0..10) {
-                val y = plotH - plotH * (i / 10f)
-                drawLine(grid, Offset(left, y), Offset(w, y), 1f)
-            }
-
-            // X grid: one per session
-            val n = history.size
-            val stepX = if (n > 1) plotW / (n - 1) else plotW
-            fun x(i: Int) = left + stepX * i
-            for (i in 0 until n) {
-                drawLine(grid, Offset(x(i), 0f), Offset(x(i), plotH), 1f)
-            }
-
-            fun yFor(v: Float) = plotH - plotH * (v.coerceIn(0f, 100f) / 100f)
-
-            fun buildPath(values: List<Float>): Path {
-                val p = Path()
-                if (values.isEmpty()) return p
-                p.moveTo(x(0), yFor(values[0]))
-                for (i in 0 until values.size - 1) {
-                    val x0 = x(i); val y0 = yFor(values[i])
-                    val x1 = x(i + 1); val y1 = yFor(values[i + 1])
-                    val cx = (x0 + x1) / 2f
-                    p.cubicTo(cx, y0, cx, y1, x1, y1)
-                }
-                return p
-            }
-
-            fun fillUnder(p: Path, values: List<Float>, color: Color) {
-                val f = Path().apply {
-                    addPath(p)
-                    lineTo(x(values.size - 1), plotH)
-                    lineTo(x(0), plotH)
-                    close()
-                }
-                drawPath(
-                    f,
-                    brush = Brush.verticalGradient(
-                        colors = listOf(color.copy(alpha = 0.35f), color.copy(alpha = 0f)),
-                        startY = 0f, endY = plotH
-                    )
-                )
-            }
-
-            val accPath = buildPath(accuracy)
-            val timePath = buildPath(times)
-
-            fillUnder(timePath, times, pink)
-            fillUnder(accPath, accuracy, teal)
-
-            drawPath(timePath, pink, style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round))
-            drawPath(accPath, teal, style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round))
-        }
+    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
+        Txt("● Accuracy", 11, FontWeight.SemiBold, teal)
+        Txt("● Speed (higher = faster)", 11, FontWeight.SemiBold, pink)
     }
-}
+    Canvas(
+        Modifier
+            .fillMaxWidth()
+            .height(160.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .background(panel)
+            .padding(12.dp)
+    ) {
+        val w = size.width
+        val h = size.height
+        val left = 4.dp.toPx()
+        val bottom = 20.dp.toPx()
+        val plotW = w - left
+        val plotH = h - bottom
+
+        // Y grid: 10 ticks over 0..180
+        for (i in 0..10) {
+            val y = plotH - plotH * (i / 10f)
+            drawLine(grid, Offset(left, y), Offset(w, y), 1f)
+            // tiny muted y label
+        }
+
+        // X grid: one per session
+        val n = history.size
+        val stepX = if (n > 1) plotW / (n - 1) else plotW
+        fun x(i: Int) = left + stepX * i
+        for (i in 0 until n) {
+            drawLine(grid, Offset(x(i), 0f), Offset(x(i), plotH), 1f)
+        }
+
+        fun yFor(v: Float) = plotH - plotH * (v.coerceIn(0f, 100f) / 100f)
+
+        // Build smooth cubic path through points
+        fun buildPath(values: List<Float>): Path {
+            val p = Path()
+            if (values.isEmpty()) return p
+            p.moveTo(x(0), yFor(values[0]))
+            for (i in 0 until values.size - 1) {
+                val x0 = x(i); val y0 = yFor(values[i])
+                val x1 = x(i + 1); val y1 = yFor(values[i + 1])
+                val cx = (x0 + x1) / 2f
+                p.cubicTo(cx, y0, cx, y1, x1, y1)
+            }
+            return p
+        }
+
+        fun fillUnder(p: Path, values: List<Float>, color: Color) {
+            val f = Path().apply {
+                addPath(p)
+                lineTo(x(values.size - 1), plotH)
+                lineTo(x(0), plotH)
+                close()
+            }
+            drawPath(
+                f,
+                brush = Brush.verticalGradient(
+                    colors = listOf(color.copy(alpha = 0.35f), color.copy(alpha = 0f)),
+                    startY = 0f, endY = plotH
+                )
+            )
+        }
+
+        val accPath = buildPath(accuracy)
+        val timePath = buildPath(times)
+
+        fillUnder(timePath, times, pink)
+        fillUnder(accPath, accuracy, teal)
+
+        drawPath(accPath, teal, style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round))
+    }   // closes Canvas
+    }   // closes Column  <-- new
+}       // closes TrendChart
 
 @Composable
 fun RoundButton(text: String, onClick: () -> Unit) {

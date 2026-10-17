@@ -784,30 +784,29 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
 @Composable
 fun ProgressHeader(title: String, subtitle: String, onBack: () -> Unit) {
     val shape = RoundedCornerShape(22.dp)
+    // FIX #8: perf — the entire header card is now the tap target. Previously only the
+    // chevron was tappable, which required precise aim; now a tap anywhere on the
+    // gradient triggers onBack. The chevron is still rendered as an affordance but
+    // has its own no-op-free appearance.
     Row(
-        Modifier.fillMaxWidth().shadow(8.dp, shape).clip(shape)
-            .background(AppTheme.colors.accent).padding(18.dp),
+        Modifier.fillMaxWidth()
+            .shadow(8.dp, shape)
+            .clip(shape)
+            .background(AppTheme.colors.accent)
+            .bounceClick(shape, 0.dp, onClick = onBack)
+            .padding(18.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         Column(Modifier.weight(1f)) {
             Txt(title, 22, FontWeight.ExtraBold, Color.White)
             Txt(subtitle, 13, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
         }
-        // FIX #8: perf — bare chevron. No background box, no shape. Tappable 48dp hit
-        // area for accessibility; glyph is centered inside it.
+        // Visual affordance only — the ripple and click are handled by the parent Row.
         Box(
-            Modifier
-                .size(48.dp)
-                .bounceClick(RoundedCornerShape(50), 0.dp, onClick = onBack),
+            Modifier.size(44.dp),
             contentAlignment = Alignment.Center
         ) {
-            Txt(
-                "‹",
-                34,
-                FontWeight.Bold,
-                Color.White,
-                align = TextAlign.Center
-            )
+            Txt("‹", 34, FontWeight.Bold, Color.White, align = TextAlign.Center)
         }
     }
 }
@@ -993,7 +992,13 @@ private fun CountdownOverlay(label: String) {
     Box(
         Modifier
             .fillMaxSize()
-            .background(Color(0xE60F1020)),
+            // FIX #8: perf — swallow touches so nothing behind the countdown responds.
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = {}
+            )
+            .background(Color(0xE60F1020)),   // ~90% opaque app background
         contentAlignment = Alignment.Center
     ) {
         Box(
@@ -1027,6 +1032,14 @@ private fun ResetOverlay(label: String) {
     Box(
         Modifier
             .fillMaxSize()
+            // FIX #8: perf — no-op clickable acts as a touch blocker. Without this,
+            // taps pass through the overlay to any clickable behind it (buttons,
+            // cards, the chevron). The empty onClick intentionally does nothing.
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = {}
+            )
             .background(Color(0x9A0F1020)),   // 60% opaque — content still visible
         contentAlignment = Alignment.Center
     ) {

@@ -16,6 +16,9 @@ import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.CompositionLocalProvider
+import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
 
 class MainActivity : ComponentActivity() {
@@ -40,38 +43,56 @@ class MainActivity : ComponentActivity() {
 fun AppRoot(vm: TrainerViewModel) {
     val colors = AppTheme.colors
 
-    BackHandler(enabled = vm.screen != Screen.Loading && vm.screen != Screen.Menu) {
-        vm.onBack()
-    }
+    // FIX #8: perf — ONE CompositionLocalProvider wraps the whole tree so every
+    // bounceClick reads the current nav-lock value. Re-emitting it inside the Box was
+    // redundant (and made the brace structure hard to follow).
+    CompositionLocalProvider(LocalNavLock provides vm.isNavigating) {
 
-    // FIX #5: ONE root container with ONE AnimatedContent. There are no fragments, no
-    // back stack and no retained views: when a screen leaves composition it is disposed.
-    // Every screen paints an opaque full-size background and the container itself is
-    // opaque, so no elevation shadow or previous screen can show through on the menu.
-    Box(Modifier.fillMaxSize().background(colors.background)) {
-        AnimatedContent(
-            targetState = vm.screen,
-            transitionSpec = {
-                val forward = targetState.ordinal > initialState.ordinal
-                // FIX #8: perf — shortened from 380ms to 240ms and reduced slide offset
-                // so the menu appears before the loading fade completes and card layout
-                // settles on the first visible frame.
-                (slideInHorizontally(animationSpec = tween(240)) { w -> if (forward) w / 4 else -w / 4 } +
-                    fadeIn(tween(240))) togetherWith
-                    (slideOutHorizontally(animationSpec = tween(240)) { w -> if (forward) -w / 4 else w / 4 } +
-                        fadeOut(tween(180)))
-            },
-            label = "screens"
-        ) { s ->
-            when (s) {
-                Screen.Loading -> LoadingScreen(vm)
-                Screen.Menu -> MenuScreen(vm)
-                Screen.Range -> RangeScreen(vm)
-                Screen.Training -> TrainingScreen(vm)
-                Screen.Results -> ResultsScreen(vm)
-                Screen.Progress -> ProgressScreen(vm)
-                Screen.CategoryDetail -> CategoryDetailScreen(vm)
+        // FIX #8: perf — release the nav lock after the destination screen has composed
+        // and drawn. Keyed on vm.screen so it fires exactly once per transition.
+        LaunchedEffect(vm.screen) {
+            if (vm.screen == Screen.Loading) return@LaunchedEffect
+            // Snapshot the generation BEFORE yielding — if a nav races in during the
+            // settle frames, this release would otherwise carry the wrong generation.
+            val gen = vm.currentNavGeneration()
+            withFrameNanos { }
+            withFrameNanos { }
+            vm.arrivedAt(gen)
+        }
+
+        BackHandler(enabled = vm.screen != Screen.Loading && vm.screen != Screen.Menu) {
+            vm.onBack()
+        }
+
+        // FIX #5: ONE root container with ONE AnimatedContent. There are no fragments,
+        // no back stack, and no retained views: when a screen leaves composition it is
+        // disposed. Every screen paints an opaque full-size background and the container
+        // itself is opaque, so no elevation shadow or previous screen can show through.
+        Box(Modifier.fillMaxSize().background(colors.background)) {
+            AnimatedContent(
+                targetState = vm.screen,
+                transitionSpec = {
+                    val forward = targetState.ordinal > initialState.ordinal
+                    // FIX #8: perf — shortened from 380ms to 240ms with a smaller slide
+                    // offset so the menu appears before the loading fade completes.
+                    (slideInHorizontally(animationSpec = tween(240)) { w -> if (forward) w / 4 else -w / 4 } +
+                        fadeIn(tween(240))) togetherWith
+                        (slideOutHorizontally(animationSpec = tween(240)) { w -> if (forward) -w / 4 else w / 4 } +
+                            fadeOut(tween(180)))
+                },
+                label = "screens"
+            ) { s ->
+                when (s) {
+                    Screen.Loading -> LoadingScreen(vm)
+                    Screen.Menu -> MenuScreen(vm)
+                    Screen.Range -> RangeScreen(vm)
+                    Screen.Training -> TrainingScreen(vm)
+                    Screen.Results -> ResultsScreen(vm)
+                    Screen.Progress -> ProgressScreen(vm)
+                    Screen.CategoryDetail -> CategoryDetailScreen(vm)
+                }
             }
         }
-    }
+
+    }   // closes CompositionLocalProvider(LocalNavLock)
 }

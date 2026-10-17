@@ -19,6 +19,7 @@ import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.fillMaxSize
+import androidx.compose.runtime.remember
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
@@ -49,10 +50,10 @@ class MainActivity : ComponentActivity() {
 fun AppRoot(vm: TrainerViewModel) {
     val colors = AppTheme.colors
 
-    // FIX #8: perf — ONE CompositionLocalProvider wraps the whole tree so every
-    // bounceClick reads the current nav-lock value. Re-emitting it inside the Box was
-    // redundant (and made the brace structure hard to follow).
-    CompositionLocalProvider(LocalNavLock provides vm.isNavigating) {
+    val navLock = remember(vm) { { vm.isNavigating } }
+
+    // FIX #8: perf — ONE CompositionLocalProvider wraps the whole tree ...
+    CompositionLocalProvider(LocalNavLock provides navLock) {
 
         // FIX #8: perf — release the nav lock after the destination screen has composed
         // and drawn. Keyed on vm.screen so it fires exactly once per transition.

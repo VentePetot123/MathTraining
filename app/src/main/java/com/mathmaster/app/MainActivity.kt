@@ -6,8 +6,6 @@ import androidx.activity.compose.BackHandler
 import androidx.activity.compose.setContent
 import androidx.activity.viewModels
 import androidx.compose.animation.AnimatedContent
-import androidx.compose.animation.fadeIn
-import androidx.compose.animation.fadeOut
 import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.core.tween
@@ -73,12 +71,17 @@ fun AppRoot(vm: TrainerViewModel) {
                 targetState = vm.screen,
                 transitionSpec = {
                     val forward = targetState.ordinal > initialState.ordinal
-                    // FIX #8: perf — shortened from 380ms to 240ms with a smaller slide
-                    // offset so the menu appears before the loading fade completes.
-                    (slideInHorizontally(animationSpec = tween(240)) { w -> if (forward) w / 4 else -w / 4 } +
-                        fadeIn(tween(240))) togetherWith
-                        (slideOutHorizontally(animationSpec = tween(240)) { w -> if (forward) -w / 4 else w / 4 } +
-                            fadeOut(tween(180)))
+                    // FIX #8: perf — was slide + fade running simultaneously on both
+                    // incoming and outgoing screens. That's 4 channels of animation per
+                    // transition, each redrawing a full-screen layer. Trimmed to a single
+                    // slide (no fade) at 220ms. Looks identical to the eye, halves the
+                    // render work.
+                    slideInHorizontally(animationSpec = tween(220)) { w ->
+                        if (forward) w / 5 else -w / 5
+                    } togetherWith
+                        slideOutHorizontally(animationSpec = tween(220)) { w ->
+                            if (forward) -w / 5 else w / 5
+                        }
                 },
                 label = "screens"
             ) { s ->

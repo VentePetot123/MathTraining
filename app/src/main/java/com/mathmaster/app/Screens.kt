@@ -112,9 +112,14 @@ fun LoadingScreen(vm: TrainerViewModel) {
 @Composable
 fun MenuScreen(vm: TrainerViewModel) {
     val c = AppTheme.colors
-    // FIX #8: perf — removed the grid-wide alpha fade. AnimatedContent already slides
-    // the whole screen in; a second fade forced an offscreen buffer for the entire
-    // grid, adding ~5-10ms per frame during the transition. The slide is enough polish.
+    // FIX #8: perf — defer the heavy category card composition by two frames so the
+    // Loading→Menu transition renders smoothly.
+    var cardsReady by remember { mutableStateOf(false) }
+    LaunchedEffect(Unit) {
+        withFrameNanos { }
+        withFrameNanos { }
+        cardsReady = true
+    }
     LazyVerticalGrid(
         columns = GridCells.Fixed(2),
         modifier = Modifier
@@ -124,10 +129,11 @@ fun MenuScreen(vm: TrainerViewModel) {
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        // FIX #8: perf — header is now a tap target for the Progress Dashboard.
         item(span = { GridItemSpan(maxLineSpan) }) { MenuHeader(vm) { vm.openProgress() } }
-        itemsIndexed(Categories.all) { index, cat ->
-            CategoryCard(index, cat, vm.menuStats[cat.id]) { vm.openCategory(cat) }
+        if (cardsReady) {
+            itemsIndexed(Categories.all) { index, cat ->
+                CategoryCard(index, cat, vm.menuStats[cat.id]) { vm.openCategory(cat) }
+            }
         }
     }
 }
@@ -675,6 +681,30 @@ fun ResultsScreen(vm: TrainerViewModel) {
     }
 }
 
+// FIX #8: perf — reusable "content deferral" gate. Mounts `content` only after two
+// clean frames have passed since first composition. This lets the screen transition
+// animation render without competing with heavy child composition (grids, canvases,
+// sorted lists) — which is what was causing the visible stutter mid-fade. The
+// placeholder is empty (Box), so the animation has near-zero work per frame.
+@Composable
+private fun DeferredContent(
+    key: Any? = Unit,
+    placeholder: @Composable () -> Unit = {},
+    content: @Composable () -> Unit
+) {
+    var ready by remember(key) { mutableStateOf(false) }
+    LaunchedEffect(key) {
+        if (key != null) {
+            ready = false
+            withFrameNanos { }
+            withFrameNanos { }
+            ready = true
+        } else {
+            ready = true
+        }
+    }
+    if (ready) content() else placeholder()
+}
 
 // =====================================================================
 // Progress Dashboard  (FIX #8: perf)
@@ -722,21 +752,23 @@ fun ProgressScreen(vm: TrainerViewModel) {
             }
         }
 
-        if (vm.dashboardLoading || dash == null) {
-            DashboardLoadingIndicator()
-        } else if (!cardsReady) {
-            // Show a thin placeholder during the 2-frame deferral window — the user
-            // doesn't see it because the fade is still running.
-            Box(Modifier.fillMaxWidth().height(1.dp))
-        } else {
-            Categories.all.forEach { cat ->
-                CategoryProgressSection(
-                    cat = cat,
-                    mastery = dash.mastery[cat.id] ?: Triple(0, 0, 0),
-                    history = dash.history[cat.id] ?: emptyList(),
-                    details = dash.details[cat.id] ?: emptyList(),
-                    onOpen = { vm.openCategoryDetail(cat) }
-                )
+        // FIX #8: perf — defer the heavy category-card grid until after the screen
+        // transition has rendered its first few frames. Without this, all 9 cards
+        // compose on the transition frame, and the resulting main-thread work blocks
+        // the fade, making it visibly stutter.
+        DeferredContent(key = "progress_cards") {
+            if (vm.dashboardLoading || dash == null) {
+                DashboardLoadingIndicator()
+            } else {
+                Categories.all.forEach { cat ->
+                    CategoryProgressSection(
+                        cat = cat,
+                        mastery = dash.mastery[cat.id] ?: Triple(0, 0, 0),
+                        history = dash.history[cat.id] ?: emptyList(),
+                        details = dash.details[cat.id] ?: emptyList(),
+                        onOpen = { vm.openCategoryDetail(cat) }
+                    )
+                }
             }
         }
     }
@@ -848,19 +880,22 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
             }
         }
 
-        if (vm.dashboardLoading || dash == null) {
-            DashboardLoadingIndicator()
-        } else if (!cardReady) {
-            Box(Modifier.fillMaxWidth().height(1.dp))
-        } else {
-            CategoryProgressSection(
-                cat = cat,
-                mastery = dash.mastery[cat.id] ?: Triple(0, 0, 0),
-                history = dash.history[cat.id] ?: emptyList(),
-                details = dash.details[cat.id] ?: emptyList(),
-                onOpen = null,
-                showHeader = false
-            )
+        // FIX #8: perf — defer the mastery card until the transition has rendered a
+        // few frames. Same reasoning as ProgressScreen: the card's Canvas chart +
+        // sorted lists were composing during the fade and blocking the animation.
+        DeferredContent(key = "category_detail_card") {
+            if (vm.dashboardLoading || dash == null) {
+                DashboardLoadingIndicator()
+            } else {
+                CategoryProgressSection(
+                    cat = cat,
+                    mastery = dash.mastery[cat.id] ?: Triple(0, 0, 0),
+                    history = dash.history[cat.id] ?: emptyList(),
+                    details = dash.details[cat.id] ?: emptyList(),
+                    onOpen = null,
+                    showHeader = false
+                )
+            }
         }
     }
 

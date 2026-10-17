@@ -179,54 +179,50 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         totals = Totals(store.totalAnswers(), store.sessions(), store.bestStreak())
     }
 
-    // FIX #8: perf — dashboard + detail navigation. Data loads asynchronously; the
-    // screens render an empty state until `dashboard` is populated.
+    private fun buildDashboard() = DashboardData(
+        Categories.all.associate { it.id to engine.mastery(it.id) },
+        Categories.all.associate { it.id to engine.history(it.id) },
+        Categories.all.associate { it.id to engine.details(it.id) }
+    )
+
+    private var dashJob: Job? = null
+
+    // Rebuild off the main thread; publish only if something changed, so unchanged
+    // cards skip recomposition. delayMs lets an open-time refresh wait until the
+    // screen transition has finished.
+    private fun refreshDashboard(delayMs: Long = 0L) {
+        dashJob?.cancel()
+        dashJob = viewModelScope.launch {
+            if (delayMs > 0) delay(delayMs)
+            val fresh = withContext(Dispatchers.IO) { buildDashboard() }
+            if (fresh != dashboard) dashboard = fresh
+        }
+    }
+
     fun openProgress() {
-        // FIX #8: perf — compute the dashboard snapshot BEFORE engaging the nav lock
-        // and starting the slide. Otherwise the slide animates while Categories.all
-        // is being mapped into 10 fresh dashboard sections, causing the visible lag.
-        // By loading first, the destination screen mounts with data already present —
-        // no `dashboardLoading` branch, no placeholder flash, no card composition
-        // racing the slide.
-        if (dashboard == null) {
-            dashboardLoading = true
-            viewModelScope.launch {
-                val data = withContext(Dispatchers.IO) {
-                    DashboardData(
-                        Categories.all.associate { it.id to engine.mastery(it.id) },
-                        Categories.all.associate { it.id to engine.history(it.id) },
-                        Categories.all.associate { it.id to engine.details(it.id) }
-                    )
-                }
-                dashboard = data
-                dashboardLoading = false
-                // Now that data is ready, engage the nav lock and slide.
+        if (isNavigating) return
+        if (dashboard != null) {
+            navigateTo(Screen.Progress)       // instant: cached snapshot
+            refreshDashboard(delayMs = 450)   // quiet catch-up after the transition
+        } else {
+            viewModelScope.launch {           // only after a reset / first run
+                dashboard = withContext(Dispatchers.IO) { buildDashboard() }
                 navigateTo(Screen.Progress)
             }
-        } else {
-            navigateTo(Screen.Progress)
         }
     }
 
     fun openCategoryDetail(c: Category) {
-        // FIX #8: perf — same pattern as openProgress. Load first, then navigate.
+        if (isNavigating) return
         selected = c
-        if (dashboard == null) {
-            dashboardLoading = true
+        if (dashboard != null) {
+            navigateTo(Screen.CategoryDetail)
+            refreshDashboard(delayMs = 450)
+        } else {
             viewModelScope.launch {
-                val data = withContext(Dispatchers.IO) {
-                    DashboardData(
-                        Categories.all.associate { it.id to engine.mastery(it.id) },
-                        Categories.all.associate { it.id to engine.history(it.id) },
-                        Categories.all.associate { it.id to engine.details(it.id) }
-                    )
-                }
-                dashboard = data
-                dashboardLoading = false
+                dashboard = withContext(Dispatchers.IO) { buildDashboard() }
                 navigateTo(Screen.CategoryDetail)
             }
-        } else {
-            navigateTo(Screen.CategoryDetail)
         }
     }
 
@@ -299,6 +295,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
             showQuit = false
             engine.flush()
             refreshMenu()
+            refreshDashboard()
         }
         // If nav bailed, still clear local state — the session is dead either way.
         if (!navigated) {
@@ -566,6 +563,8 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch(Dispatchers.IO) {
             engine.recordSession(cat, score, total, avgMs)
             engine.flush()
+            val fresh = buildDashboard()
+            if (fresh != dashboard) dashboard = fresh
         }
         results = ResultsUi(
             categoryId = u.categoryId,

@@ -1075,10 +1075,27 @@ private fun summarize(
     details: List<AdaptiveEngine.FactDetail>
 ): Pair<String, String> {
     if (details.isEmpty()) return "no data yet" to "no data yet"
-    val best = details.maxByOrNull { it.correct }?.key ?: "—"
-    val worst = details.maxByOrNull { it.incorrect }?.key ?: "—"
-    val strong = "strong on $best"
-    val weak = "weak on $worst"
+
+    // FIX #8 — partition into mutually exclusive buckets so the SAME fact can never
+    // appear in both "strong on" and "weak on". This mirrors the partitioning used
+    // by the detailed lists: strengths are net-positive facts, weaknesses are
+    // net-neutral-or-negative facts.
+    val netPositive = details.filter { it.correct > it.incorrect }
+    val netNegative = details.filter { it.incorrect > 0 && it.incorrect >= it.correct }
+
+    val best = netPositive.maxByOrNull { it.correct - it.incorrect }?.key
+    val worst = netNegative.maxByOrNull { it.incorrect - it.correct }?.key
+
+    val strong = when {
+        best != null -> "strong on $best"
+        details.any { it.correct > 0 } -> "no clear strength yet"
+        else -> "no data yet"
+    }
+    val weak = when {
+        worst != null -> "weak on $worst"
+        details.any { it.incorrect > 0 } -> "no clear weakness yet"
+        else -> "no data yet"
+    }
     return strong to weak
 }
 

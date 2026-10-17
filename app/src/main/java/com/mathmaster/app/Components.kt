@@ -86,6 +86,11 @@ fun Txt(
 }
 
 // Animation: tap feedback on every button = spring scale-down + ripple (clipped to the shape).
+// FIX #8: perf — a CompositionLocal carries the "is navigating" signal to every
+// clickable. Using a local instead of `viewModel()` in bounceClick makes it usable
+// in previews, tests, and any composable — no ViewModelStoreOwner required.
+val LocalNavLock = androidx.compose.runtime.staticCompositionLocalOf { false }
+
 fun Modifier.bounceClick(
     shape: Shape = RoundedCornerShape(16.dp),
     elevation: Dp = 0.dp,
@@ -95,15 +100,13 @@ fun Modifier.bounceClick(
 ): Modifier = composed {
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
+    val navigating = LocalNavLock.current
+
     val scale by animateFloatAsState(
-        targetValue = if (pressed && enabled) pressedScale else 1f,
+        targetValue = if (pressed && enabled && !navigating) pressedScale else 1f,
         animationSpec = spring(dampingRatio = 0.55f, stiffness = 500f),
         label = "pressScale"
     )
-    // FIX #8: perf — debounce guard. `clickable` consumes the touch itself, but a
-    // rapid double-tap on the same control still fires onClick twice. Track the last
-    // accepted tap time; reject any tap within DEBOUNCE_MS of the previous one.
-    // This makes every control in the app single-tap-safe without changing call sites.
     val lastTap = remember { mutableLongStateOf(0L) }
     this
         .graphicsLayer {
@@ -116,7 +119,7 @@ fun Modifier.bounceClick(
         .clickable(
             interactionSource = source,
             indication = LocalIndication.current,
-            enabled = enabled,
+            enabled = enabled && !navigating,
             onClick = {
                 val now = SystemClock.uptimeMillis()
                 if (now - lastTap.longValue < DEBOUNCE_MS) return@clickable
@@ -511,45 +514,50 @@ fun NumberInputDialog(
         textContentColor = c.muted,
         title = { Txt("Enter value (1–99)", 16, FontWeight.Bold) },
         text = {
-            BasicTextField(
-                value = buffer,
-                onValueChange = { new ->
-                    // Keep only digits (safety net for paste / autofill)
-                    val digitsOnly = new.filter { it.isDigit() }
-                    when {
-                        digitsOnly.length <= 2 -> buffer = digitsOnly
-                        else -> {
-                            // User tried to type a 3rd digit — reject and warn.
-                            maxDigitsTick++
-                        }
-                    }
-                },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Number,
-                    imeAction = ImeAction.Done
-                ),
-                keyboardActions = KeyboardActions(
-                    onDone = {
-                        val parsed = buffer.toIntOrNull()
-                        if (parsed != null && parsed in 1..99) onConfirm(parsed)
-                    }
-                ),
-                cursorBrush = SolidColor(c.accentA),
-                textStyle = TextStyle(
-                    color = c.onBackground,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                ),
-                modifier = Modifier
+            // FIX #8: perf — BasicTextField doesn't center text via TextStyle alone.
+            // To visually center the digits AND keep the cursor next to them, wrap the
+            // field in a Box with contentAlignment = Center and let the field wrap its
+            // own content (no fillMaxWidth on the field itself).
+            Box(
+                Modifier
                     .fillMaxWidth()
                     .height(64.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(c.surfaceAlt)
-                    .focusRequester(focusRequester)
-                    .padding(horizontal = 12.dp)
-            )
+                    .background(c.surfaceAlt),
+                contentAlignment = Alignment.Center
+            ) {
+                BasicTextField(
+                    value = buffer,
+                    onValueChange = { new ->
+                        val digitsOnly = new.filter { it.isDigit() }
+                        when {
+                            digitsOnly.length <= 2 -> buffer = digitsOnly
+                            else -> maxDigitsTick++
+                        }
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            val parsed = buffer.toIntOrNull()
+                            if (parsed != null && parsed in 1..99) onConfirm(parsed)
+                        }
+                    ),
+                    cursorBrush = SolidColor(c.accentA),
+                    textStyle = TextStyle(
+                        color = c.onBackground,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.Center
+                    ),
+                    modifier = Modifier
+                        .focusRequester(focusRequester)
+                        .padding(horizontal = 12.dp)
+                )
+            }
         },
         confirmButton = {
             val parsed = buffer.toIntOrNull()
@@ -582,8 +590,18 @@ fun NumberInputDialog(
                     usePlatformDefaultWidth = false
                 )
             ) {
-                MaxDigitsToast()
+                // FIX #8: perf — reset the tick when the fade completes. This removes
+                // the Dialog from composition entirely, so the invisible alpha=0 touch
+                // blocker no longer overlaps the underlying input dialog.
+                MaxDigitsToast(onDismiss = { maxDigitsTick = 0 })
             }
+        }
+        // FIX #8: perf — hard safety net. If the toast's own onDismiss ever fails to
+        // fire (e.g. rotation interrupts the animation), force-unmount after 2s so the
+        // user is never stuck behind an invisible touch blocker.
+        LaunchedEffect(maxDigitsTick) {
+            kotlinx.coroutines.delay(2000)
+            if (maxDigitsTick > 0) maxDigitsTick = 0
         }
     }
 }
@@ -593,12 +611,18 @@ fun NumberInputDialog(
 // layout. Fade in → hold → fade out, then it's removed from composition entirely.
 // Uses graphicsLayer + alpha only; no layout animations, no per-frame allocations.
 @Composable
-fun MaxDigitsToast(message: String = "Max Digits") {
+fun MaxDigitsToast(
+    message: String = "Max Digits",
+    onDismiss: () -> Unit = {}
+) {
     val alpha = remember(message) { Animatable(0f) }
     LaunchedEffect(message) {
         alpha.animateTo(1f, tween(140, easing = FastOutSlowInEasing))
         kotlinx.coroutines.delay(600)
         alpha.animateTo(0f, tween(220, easing = FastOutSlowInEasing))
+        // FIX #8: perf — tell the parent to unmount us. Without this, the invisible
+        // alpha=0 touch-blocker Box stays composed and freezes the app underneath.
+        onDismiss()
     }
 
     Box(

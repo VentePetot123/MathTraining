@@ -39,6 +39,7 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import android.os.SystemClock
 import androidx.compose.runtime.mutableLongStateOf
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
@@ -94,10 +95,10 @@ val LocalNavLock = androidx.compose.runtime.staticCompositionLocalOf { false }
 // FIX #8: perf — snappier bounceClick. Changes vs. previous version:
 //   • Animation is a tween(140) instead of spring(500) — feels immediate, still
 //     reads as "pressed". Spring was 300-400ms before release; this is 140ms.
-//   • Navigation lock is read INSIDE the clickable callback (not in composition),
-//     so cards don't recompose when isNavigating flips.
+//   • `LocalNavLock` is read ONCE per composition (via remember) and captured in the
+//     click callback. It's a stable value at click time — reading it inside onClick
+//     is illegal because CompositionLocal reads are @Composable-only.
 //   • Debounce still applies (350ms) — prevents double-fire of the same action.
-//   • graphicsLayer scale is only mutated while pressed; when idle it stays at 1f.
 fun Modifier.bounceClick(
     shape: Shape = RoundedCornerShape(16.dp),
     elevation: Dp = 0.dp,
@@ -108,6 +109,10 @@ fun Modifier.bounceClick(
     val source = remember { MutableInteractionSource() }
     val pressed by source.collectIsPressedAsState()
     val lastTap = remember { mutableLongStateOf(0L) }
+    // Read the nav lock in composition (allowed), then close over the value.
+    // `rememberUpdatedState` keeps the captured value fresh across recompositions
+    // without re-triggering the modifier chain.
+    val navLockState = androidx.compose.runtime.rememberUpdatedState(LocalNavLock.current)
     val scale by animateFloatAsState(
         targetValue = if (pressed && enabled) pressedScale else 1f,
         animationSpec = tween(durationMillis = 140),
@@ -126,9 +131,9 @@ fun Modifier.bounceClick(
             indication = LocalIndication.current,
             enabled = enabled,
             onClick = {
-                // Read the nav lock HERE, not in composition. This is the fix:
-                // cards no longer recompose when isNavigating changes.
-                if (LocalNavLock.current) return@clickable
+                // Read the CURRENT lock value (not a stale snapshot). This is a
+                // plain State<T>.value read — legal in a callback.
+                if (navLockState.value) return@clickable
                 val now = SystemClock.uptimeMillis()
                 if (now - lastTap.longValue < DEBOUNCE_MS) return@clickable
                 lastTap.longValue = now

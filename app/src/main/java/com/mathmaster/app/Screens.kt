@@ -23,6 +23,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.heightIn
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -501,14 +502,27 @@ fun QuestionCard(u: UiSession) {
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(64.dp)
+                .heightIn(min = 64.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(c.surfaceAlt)
                 .border(2.dp, borderColor, RoundedCornerShape(16.dp)),
             contentAlignment = Alignment.Center
         ) {
             if (u.input.isEmpty()) Txt("?", 28, FontWeight.Bold, c.muted)
-            else Txt(u.input, 30, FontWeight.Bold, c.onBackground)
+            else Txt(
+                u.input,
+                when {
+                    u.input.length <= 8 -> 30
+                    u.input.length <= 11 -> 24
+                    u.input.length <= 16 -> 19
+                    u.input.length <= 24 -> 15
+                    else -> 12
+                },
+                FontWeight.Bold,
+                c.onBackground,
+                Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                TextAlign.Center
+            )
         }
 
         Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) {
@@ -536,9 +550,14 @@ fun QuestionCard(u: UiSession) {
                         18, FontWeight.Bold, c.error
                     )
                 }
-                Feedback.None -> if (u.hint != null) Txt(u.hint, 14, FontWeight.Medium, c.warning)
-            }
-        }
+                Feedback.None -> {
+                    if (u.hint != null) {
+                        Txt(u.hint, 14, FontWeight.Medium, c.warning)
+                    }
+                    if (u.hint == null && fact.note != null) {
+                        Txt(fact.note, 12, FontWeight.Medium, c.muted, Modifier.fillMaxWidth(), TextAlign.Center)
+                    }
+                }
     }
 }
 

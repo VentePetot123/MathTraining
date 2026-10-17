@@ -800,13 +800,6 @@ fun ProgressScreen(vm: TrainerViewModel) {
             item(key = "header") {
                 ProgressHeader("Progress Dashboard", "All categories") { vm.toMenu() }
             }
-            item(key = "resetAll") {
-                GradientButton(
-                    "Reset All Progress",
-                    Modifier.fillMaxWidth(),
-                    brush = Brush.linearGradient(listOf(c.error, c.error.copy(alpha = 0.7f)))
-                ) { resetStep = 1 }
-            }
             if (dash == null) {
                 item(key = "loading") { DashboardLoadingIndicator() }
             } else {
@@ -816,9 +809,24 @@ fun ProgressScreen(vm: TrainerViewModel) {
                         mastery = dash.mastery[cat.id] ?: Triple(0, 0, 0),
                         history = dash.history[cat.id] ?: emptyList(),
                         details = dash.details[cat.id] ?: emptyList(),
-                        onOpen = { vm.openCategoryDetail(cat) }
+                        onOpen = { vm.openCategoryDetail(cat) },
+                        // FIX #8 — dashboard cards are compact: no charts, no detailed
+                        // lists. Tapping the card opens CategoryDetailScreen which
+                        // passes detailed = true and shows the full breakdown.
+                        detailed = false
                     )
                 }
+            }
+            // FIX #8 — action at the very bottom of the dashboard. Placing it after
+            // the category list (instead of after the header) forces the user to
+            // scroll past their progress before the destructive action, which is
+            // both a UX improvement and a safety measure against mis-taps.
+            item(key = "resetAll") {
+                GradientButton(
+                    "Reset All Progress",
+                    Modifier.fillMaxWidth(),
+                    brush = Brush.linearGradient(listOf(c.error, c.error.copy(alpha = 0.7f)))
+                ) { resetStep = 1 }
             }
         }
 
@@ -910,6 +918,22 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
             }
         }
 
+        // FIX #8 — mastery card first, actions at the bottom. This mirrors the dashboard:
+        // the user scrolls through their progress, then acts. Also removes the visual
+        // weight of big buttons directly under the hero, letting the eye settle on data.
+        if (dash == null) {
+            DashboardLoadingIndicator()
+        } else {
+            CategoryProgressSection(
+                cat = cat,
+                mastery = dash.mastery[cat.id] ?: Triple(0, 0, 0),
+                history = dash.history[cat.id] ?: emptyList(),
+                details = dash.details[cat.id] ?: emptyList(),
+                onOpen = null,
+                showHeader = false
+            )
+        }
+
         // FIX #8 — action row is hidden when CategoryDetail was opened from Results.
         // The user just finished a session; showing Start Practice / Menu / Reset
         // again would be redundant (Results already has those actions). The screen
@@ -926,19 +950,6 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
                     size = 14
                 ) { resetStep = 1 }
             }
-        }
-
-        if (dash == null) {
-            DashboardLoadingIndicator()
-        } else {
-            CategoryProgressSection(
-                cat = cat,
-                mastery = dash.mastery[cat.id] ?: Triple(0, 0, 0),
-                history = dash.history[cat.id] ?: emptyList(),
-                details = dash.details[cat.id] ?: emptyList(),
-                onOpen = null,
-                showHeader = false
-            )
         }
     }
 
@@ -1023,7 +1034,12 @@ fun CategoryProgressSection(
     // FIX #8: perf — when the caller already shows the category name in a hero above
     // (CategoryDetailScreen), the in-card header would be a duplicate. Default = true
     // so existing call sites keep the header without changes.
-    showHeader: Boolean = true
+    showHeader: Boolean = true,
+    // FIX #8 — when true, also render the TrendChart + detailed strengths/weaknesses
+    // lists. When false (Progress Dashboard card grid), only the top half renders:
+    // header, mastery bars, and the one-line strengths/weaknesses summary. Tapping
+    // the card opens the full detail (CategoryDetailScreen) which passes detailed=true.
+    detailed: Boolean = true
 ) {
     val c = AppTheme.colors
     val clickMod = if (onOpen != null)
@@ -1056,35 +1072,43 @@ fun CategoryProgressSection(
         Txt("Strengths: $strongTxt", 11, FontWeight.Medium, c.success)
         Txt("Weaknesses: $weakTxt", 11, FontWeight.Medium, c.error)
 
-        // Trend chart (empty state handled inside)
-        TrendChart(history)
+        // FIX #8 — `detailed` gate: charts + detailed lists are shown only when the
+        // caller opts in. Progress Dashboard (grid of cards) passes detailed = false
+        // to keep cards compact — those details are available on CategoryDetailScreen
+        // (which passes detailed = true). This halves per-card composition cost on
+        // the dashboard, and makes the card visually read as a summary.
+        if (detailed) {
+            // Trend chart (empty state handled inside)
+            TrendChart(history)
 
-        // FIX #8 — a fact belongs to EXACTLY ONE list. Previously the filters were
-        // `correct > 0` and `incorrect > 0` independently, so a fact with one right
-        // and one wrong answer appeared in BOTH lists. Now we partition:
-        //   • strengths  = facts where correct > incorrect (net-positive)
-        //   • weaknesses = facts where incorrect >= correct (net-neutral or worse)
-        // Both sorts still cache on `details` so recomposition stays O(1).
-        val sortedByCorrect = remember(details) {
-            details.filter { it.correct > it.incorrect }
-                .sortedWith(
-                    compareByDescending<AdaptiveEngine.FactDetail> { it.correct - it.incorrect }
+            // FIX #8: perf — cache the sorted lists on the `details` reference.
+            val sortedByCorrect = remember(details) {
+                details.sortedWith(
+                    compareByDescending<AdaptiveEngine.FactDetail> { it.correct }
                         .thenBy { it.avgMs }
                 )
-        }
-        val sortedByWrong = remember(details) {
-            details.filter { it.incorrect > 0 && it.incorrect >= it.correct }
-                .sortedWith(
-                    compareByDescending<AdaptiveEngine.FactDetail> { it.incorrect - it.correct }
+            }
+            val sortedByWrong = remember(details) {
+                details.sortedWith(
+                    compareByDescending<AdaptiveEngine.FactDetail> { it.incorrect }
                         .thenByDescending { it.lastSeen }
                 )
-        }
+            }
 
-        if (sortedByCorrect.isNotEmpty()) {
-            Txt("Strengths (detailed)", 11, FontWeight.SemiBold, c.muted)
-            sortedByCorrect.take(5).forEach { d ->
-                Txt("${d.key}  ✓${d.correct}  avg ${(d.avgMs / 1000.0).format1()}s",
-                    11, FontWeight.Normal, c.onBackground)
+            if (sortedByCorrect.any { it.correct > 0 }) {
+                Txt("Strengths (detailed)", 11, FontWeight.SemiBold, c.muted)
+                sortedByCorrect.filter { it.correct > 0 }.take(5).forEach { d ->
+                    Txt("${d.key}  ✓${d.correct}  avg ${(d.avgMs / 1000.0).format1()}s",
+                        11, FontWeight.Normal, c.onBackground)
+                }
+            }
+
+            if (sortedByWrong.any { it.incorrect > 0 }) {
+                Txt("Weaknesses (detailed)", 11, FontWeight.SemiBold, c.muted)
+                sortedByWrong.filter { it.incorrect > 0 }.take(5).forEach { d ->
+                    Txt("${d.key}  ✗${d.incorrect}  avg ${(d.avgMs / 1000.0).format1()}s",
+                        11, FontWeight.Normal, c.onBackground)
+                }
             }
         }
 

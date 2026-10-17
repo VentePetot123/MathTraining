@@ -10,6 +10,10 @@ import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
+import androidx.compose.animation.scaleIn
+import androidx.compose.animation.scaleOut
+import androidx.compose.animation.core.FastOutSlowInEasing
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.togetherWith
 import androidx.compose.foundation.background
@@ -38,6 +42,8 @@ class MainActivity : ComponentActivity() {
         vm.flush()
     }
 }
+
+
 
 @Composable
 fun AppRoot(vm: TrainerViewModel) {
@@ -72,18 +78,25 @@ fun AppRoot(vm: TrainerViewModel) {
             AnimatedContent(
                 targetState = vm.screen,
                 transitionSpec = {
-                    // FIX #8: perf — restored the slide for every transition. The lag
-                    // previously attributed to "slide vs fade" was actually the destination
-                    // screen's card composition stuttering the animation. That's now fixed
-                    // at the source (VM preloads dashboard data before navigating), so the
-                    // slide itself is free to run without competing for main-thread work.
-                    val forward = targetState.ordinal > initialState.ordinal
-                    slideInHorizontally(animationSpec = tween(240)) { w ->
-                        if (forward) w / 4 else -w / 4
-                    } togetherWith
-                        slideOutHorizontally(animationSpec = tween(240)) { w ->
-                            if (forward) -w / 4 else w / 4
-                        }
+                    // FIX #8: perf — zoom-fade transition. Both `scale` and `alpha` are
+                    // pure graphicsLayer properties → rendered on the RenderThread, NOT the
+                    // main thread. This means the transition can NEVER stutter, even if
+                    // the destination screen is doing heavy layout on its first frame.
+                    //
+                    // The zoom is subtle (0.94 → 1.0) so it reads as "the new screen is
+                    // coming toward you", not "it's popping". The fade is quick (200ms) so
+                    // it feels responsive. This is what Google Maps / Instagram use.
+                    val enter = scaleIn(
+                        animationSpec = tween(220, easing = FastOutSlowInEasing),
+                        initialScale = 0.94f,
+                        transformOrigin = TransformOrigin.Center
+                    ) + fadeIn(tween(220))
+                    val exit = scaleOut(
+                        animationSpec = tween(220, easing = FastOutSlowInEasing),
+                        targetScale = 1.04f,
+                        transformOrigin = TransformOrigin.Center
+                    ) + fadeOut(tween(180))
+                    enter togetherWith exit
                 },
                 label = "screens"
             ) { s ->

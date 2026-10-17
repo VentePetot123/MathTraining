@@ -305,6 +305,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
                     openProgress()
                 }
             }
+            // FIX #8 — Range backs to Menu (standard parent navigation).
             Screen.Range, Screen.Results, Screen.Progress -> toMenu()
             else -> Unit
         }
@@ -331,7 +332,24 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun quit() = toMenu()
+    fun quit() {
+        // FIX #8 — Quit now returns to the Range screen (category settings) instead
+        // of the main Menu. This lets the user immediately start another session of
+        // the same category without re-navigating through the menu.
+        advanceJob?.cancel()
+        countdown = null
+        showQuit = false
+        engine.flush()
+        refreshMenu()
+        // Flush the dashboard refresh in the background
+        refreshDashboard()
+
+        val navigated = navigateTo(Screen.Range)
+        if (!navigated) {
+            runtime = null
+            ui = null
+        }
+    }
 
     fun flush() {
         if (engineLazy.isInitialized()) engine.flush()

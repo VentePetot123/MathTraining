@@ -330,12 +330,12 @@ fun Stepper(
     label: String,
     value: Int,
     step: Int,
-    onChange: (Int) -> Unit,
-    // FIX #8 — per-field caps. Range defaults to 2 digits / 99; Question count
-    // overrides to 3 digits / 200. The number-entry dialog and the +/− buttons
-    // both respect these limits.
+    // FIX #8 — per-field caps moved BEFORE onChange so the trailing-lambda pattern
+    // `Stepper(...) { onChange(it) }` still compiles. Kotlin binds trailing lambdas
+    // to the LAST parameter only, so `onChange` must be last.
     maxDigits: Int = 2,
-    maxValue: Int = 99
+    maxValue: Int = 99,
+    onChange: (Int) -> Unit
 ) {
     val c = AppTheme.colors
     // FIX #8: perf — the middle value is now tap-to-edit. Tapping it opens a compact

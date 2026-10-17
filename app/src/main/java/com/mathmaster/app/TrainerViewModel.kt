@@ -47,9 +47,10 @@ data class Totals(val answers: Int, val sessions: Int, val bestStreak: Int)
 
 class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     companion object {
-        // FIX #8: perf — minimum time the reset overlay stays on-screen so the user
-        // always sees feedback, even when the underlying work finishes in <100ms.
-        private const val MIN_RESET_OVERLAY_MS = 650L
+        // FIX #8: perf — upper bound on how long the nav lock can stay engaged if the
+        // destination screen never calls `arrivedAt(gen)`. 1500ms is well above any
+        // transition (240ms) plus settle time, so it only ever fires as a failsafe.
+        private const val NAV_TIMEOUT_MS = 1500L
     }
     private val store = Store(app)
     private val engineLazy = lazy { AdaptiveEngine(store) }   // lazy init: created in preload()
@@ -57,6 +58,14 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
 
     var screen by mutableStateOf(Screen.Loading)
         private set
+    // FIX #8: perf — global navigation lock. Set to true on the first nav request,
+    // cleared by the destination screen (`arrivedAt`) or by a watchdog timeout.
+    // A generation counter means a stale release (from a screen that was composed
+    // before the user navigated away) can't clear a fresh lock.
+    var isNavigating by mutableStateOf(false)
+        private set
+    private var navGeneration = 0L
+    private var navWatchdog: Job? = null
     var selected by mutableStateOf(Categories.all.first())
         private set
     var rangeMin by mutableIntStateOf(1)
@@ -138,28 +147,64 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
 
     // FIX #8: perf — dashboard + detail navigation. Data loads asynchronously; the
     // screens render an empty state until `dashboard` is populated.
-    fun openProgress() {
+    fun openProgress() = navigateTo(Screen.Progress) {
         loadDashboard()
-        screen = Screen.Progress
     }
 
-    fun openCategoryDetail(c: Category) {
+    fun openCategoryDetail(c: Category) = navigateTo(Screen.CategoryDetail) {
         selected = c
         loadDashboard()
-        screen = Screen.CategoryDetail
     }
 
     // ---------- navigation ----------
-    fun openCategory(c: Category) {
+    // FIX #8: perf — navigation lock. Released by the DESTINATION screen, not a timer.
+    //
+    //   • navigateTo(next) { prep }  — engages the lock, runs prep, flips `screen`.
+    //   • arrivedAt(gen)             — called by the destination's LaunchedEffect(Unit).
+    //                                  Only clears the lock if `gen` matches the current
+    //                                  navGeneration (prevents stale releases).
+    //   • watchdog                   — if arrivedAt never fires in NAV_TIMEOUT_MS,
+    //                                  the lock is force-cleared so the app can't freeze.
+    private fun navigateTo(next: Screen, prep: () -> Unit = {}) {
+        if (isNavigating) return       // reject taps during in-flight transition
+        if (screen == next) return     // no-op when already there (belt + suspenders)
+        isNavigating = true
+        navGeneration++
+        prep()
+        screen = next
+        navWatchdog?.cancel()
+        navWatchdog = viewModelScope.launch {
+            delay(NAV_TIMEOUT_MS)
+            // Force the lock off if nothing released it. Should never happen, but
+            // protects against rotation-into-transition or a caller that forgot
+            // to invoke `arrivedAt`.
+            if (isNavigating) isNavigating = false
+        }
+    }
+
+    /** Called by the destination screen once it's composed and stable. */
+    fun arrivedAt(gen: Long) {
+        if (gen == navGeneration && isNavigating) {
+            isNavigating = false
+            navWatchdog?.cancel()
+        }
+    }
+
+    /** Exposed so a screen can capture the generation it belongs to. */
+    fun currentNavGeneration(): Long = navGeneration
+
+    fun openCategory(c: Category) = navigateTo(Screen.Range) {
         selected = c
         val s = store.loadSettings(c.id)
         rangeMin = (s?.first ?: c.defMin).coerceIn(1, c.hardMax)
         rangeMax = (s?.second ?: c.defMax).coerceIn(rangeMin, c.hardMax)
         questionCount = (s?.third ?: 20).coerceIn(5, 200)
-        screen = Screen.Range
     }
 
     fun onBack() {
+        // FIX #8: perf — Back goes through the same guard as taps. If a transition is
+        // already running, Back is dropped; that's correct — one input per transition.
+        if (isNavigating) return
         when (screen) {
             Screen.Training -> showQuit = true
             Screen.Range, Screen.Results, Screen.Progress, Screen.CategoryDetail -> toMenu()
@@ -167,13 +212,12 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun toMenu() {
+    fun toMenu() = navigateTo(Screen.Menu) {
         advanceJob?.cancel()
-        countdown = null          // FIX #8: kill any in-flight countdown overlay
+        countdown = null
         showQuit = false
         engine.flush()
         refreshMenu()
-        screen = Screen.Menu
     }
 
     fun quit() = toMenu()
@@ -266,6 +310,9 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun startSession() {
+        // FIX #8: perf — route through navigateTo so the nav lock engages. If the user
+        // double-taps "Start Practice", the second tap is rejected by the guard inside
+        // navigateTo (`if (isNavigating) return`).
         advanceJob?.cancel()
         val c = selected
         val facts = factsFor(c, rangeMin, rangeMax)
@@ -283,7 +330,11 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         ui = UiSession(id = System.nanoTime(), categoryId = c.id, total = questionCount)
         results = null
         showQuit = false
-        screen = Screen.Training
+
+        // FIX #8: perf — nav goes through navigateTo (engages the lock) instead of
+        // assigning `screen` directly. This is the ONLY line that changes vs. the
+        // original — everything else is preserved.
+        navigateTo(Screen.Training)
 
         // FIX #8: perf — hold the first question behind a short Ready/Set/Solve!
         // countdown so the user has a beat before the answer section appears.
@@ -378,19 +429,25 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         advanceJob?.cancel()
         advanceJob = viewModelScope.launch {
             delay(if (verdict) 900L else 1900L)
-            nextQuestion()
+            // FIX #8: perf — if the user has left the Training screen (via Quit or Back)
+            // while this delay was running, nextQuestion() must not proceed. It now
+            // checks `screen` itself, so no state can be mutated after the user left.
+            if (screen == Screen.Training) nextQuestion()
         }
     }
 
     private fun finish() {
+        // FIX #8: perf — if the user already left Training (Quit pressed while the last
+        // question's feedback was visible), do not navigate to Results. Results must
+        // only appear as a consequence of a natural session end.
+        if (screen != Screen.Training) return
         val u = ui ?: return
         val rt = runtime ?: return
         val cat = u.categoryId
         val score = u.score
         val total = u.total
         val avgMs = if (rt.answerCount > 0) (rt.totalMs / rt.answerCount).toInt() else 0
-        // FIX #8: perf — persist session aggregate + flush stats on Dispatchers.IO so the
-        // results screen appears immediately without waiting for disk.
+        // Persist on IO; navigation happens via navigateTo below.
         viewModelScope.launch(Dispatchers.IO) {
             engine.recordSession(cat, score, total, avgMs)
             engine.flush()
@@ -405,6 +462,6 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
             introduced = rt.introduced
         )
         refreshMenu()
-        screen = Screen.Results
+        navigateTo(Screen.Results)
     }
 }

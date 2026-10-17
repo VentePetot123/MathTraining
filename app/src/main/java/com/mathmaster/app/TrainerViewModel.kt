@@ -47,11 +47,11 @@ data class Totals(val answers: Int, val sessions: Int, val bestStreak: Int)
 
 class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     companion object {
-        // FIX #8: perf — upper bound on how long the nav lock can stay engaged if the
-        // destination screen never calls `arrivedAt(gen)`. 1500ms is well above any
-        // transition (240ms) plus settle time, so it only ever fires as a failsafe.
-        private const val NAV_TIMEOUT_MS = 1500L
+        // FIX #8: perf — minimum time the reset overlay stays visible so the user
+        // always perceives it even when the underlying work finishes in <100ms.
+        private const val MIN_RESET_OVERLAY_MS = 650L
     }
+
     private val store = Store(app)
     private val engineLazy = lazy { AdaptiveEngine(store) }   // lazy init: created in preload()
     private val engine: AdaptiveEngine get() = engineLazy.value

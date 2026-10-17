@@ -111,6 +111,13 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     var resetting by mutableStateOf<String?>(null)
         private set
 
+    // FIX #8 — remembers where CategoryDetail was opened from. Controls two things:
+    //  • where the back chevron goes (Results vs Progress Dashboard)
+    //  • whether the action row (Start Practice / Menu / Reset Category) is shown
+    //    (hidden when opened from Results — user just finished a session).
+    var categoryDetailFromResults by mutableStateOf(false)
+        private set
+
     // FIX #8 — scroll positions preserved across navigation. The menu grid and the
     // progress dashboard each get their own LazyListState. Because the state lives in
     // the ViewModel (not in a `remember` block inside the composable), it survives
@@ -222,9 +229,10 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun openCategoryDetail(c: Category) {
+    fun openCategoryDetail(c: Category, fromResults: Boolean = false) {
         if (isNavigating) return
         selected = c
+        categoryDetailFromResults = fromResults
         if (dashboard != null) {
             navigateTo(Screen.CategoryDetail)
             refreshDashboard(delayMs = 450)
@@ -288,10 +296,15 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         if (isNavigating) return
         when (screen) {
             Screen.Training -> showQuit = true
-            // FIX #8 — CategoryDetail backs to Progress, not Menu. The Progress
-            // Dashboard is the "parent" of a category detail, so Back should return
-            // there — matching the header chevron's destination.
-            Screen.CategoryDetail -> openProgress()
+            // FIX #8 — CategoryDetail backs to Results if it was opened from there,
+            // otherwise to Progress Dashboard. Matches the chevron's destination.
+            Screen.CategoryDetail -> {
+                if (categoryDetailFromResults) {
+                    navigateTo(Screen.Results)
+                } else {
+                    openProgress()
+                }
+            }
             Screen.Range, Screen.Results, Screen.Progress -> toMenu()
             else -> Unit
         }

@@ -728,13 +728,17 @@ fun ResultsScreen(vm: TrainerViewModel) {
         }
 
         GradientButton("Practice again", Modifier.fillMaxWidth()) { vm.startSession() }
-        // FIX #8 — new secondary action: return to the range screen for this category.
-        // The `results.categoryId` is guaranteed non-null here because this branch only
-        // runs after `if (r == null) return` at the top of ResultsScreen — but we still
-        // resolve the Category via byId and guard against the (impossible) not-found
-        // case by falling back to the menu if the category was deleted mid-session.
+        // FIX #8 — resolve the current category once, reuse for both secondary buttons.
         val currentCategory = Categories.all.firstOrNull { it.id == r.categoryId }
         if (currentCategory != null) {
+            // FIX #8 — NEW: jump to the full Detailed Progress view for this category.
+            // Uses the same openCategoryDetail() path as tapping a category card on the
+            // Progress Dashboard, so all dashboard data is loaded and shown correctly.
+            SoftButton(
+                "View Progress",
+                Modifier.fillMaxWidth(),
+                onClick = { vm.openCategoryDetail(currentCategory, fromResults = true) }
+            )
             SoftButton(
                 "Back to Category",
                 Modifier.fillMaxWidth(),
@@ -876,15 +880,18 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
             .verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // FIX #8 — hero header now matches ProgressDashboard's style: symbol + name
-        // on the left, chevron on the right. The whole Row is tappable (not just the
-        // chevron) and routes to Progress. Consistent with the physical Back gesture.
+        // FIX #8 — hero header. The tap target routes to Results if this screen was
+        // opened from Results, otherwise to Progress Dashboard. Matches the system
+        // Back gesture via vm.onBack(), so both give the same destination.
+        val headerBackAction: () -> Unit = {
+            if (vm.categoryDetailFromResults) vm.onBack() else vm.openProgress()
+        }
         Row(
             Modifier.fillMaxWidth()
                 .shadow(8.dp, shape)
                 .clip(shape)
                 .background(Brush.linearGradient(listOf(cat.colorA, cat.colorB)))
-                .bounceClick(shape, 0.dp, onClick = { vm.openProgress() })
+                .bounceClick(shape, 0.dp, onClick = headerBackAction)
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -903,18 +910,22 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
             }
         }
 
-        // FIX #8: perf — tighter action row: one primary button + two secondaries
-        // side by side, halving the vertical space they consume.
-        GradientButton("Start Practice", Modifier.fillMaxWidth()) { vm.startSession() }
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SoftButton("Menu", Modifier.weight(1f), size = 14) { vm.toMenu() }
-            SoftButton(
-                "Reset Category",
-                Modifier.weight(1f),
-                container = c.error.copy(alpha = 0.15f),
-                content = c.error,
-                size = 14
-            ) { resetStep = 1 }
+        // FIX #8 — action row is hidden when CategoryDetail was opened from Results.
+        // The user just finished a session; showing Start Practice / Menu / Reset
+        // again would be redundant (Results already has those actions). The screen
+        // becomes a pure progress view in that case.
+        if (!vm.categoryDetailFromResults) {
+            GradientButton("Start Practice", Modifier.fillMaxWidth()) { vm.startSession() }
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                SoftButton("Menu", Modifier.weight(1f), size = 14) { vm.toMenu() }
+                SoftButton(
+                    "Reset Category",
+                    Modifier.weight(1f),
+                    container = c.error.copy(alpha = 0.15f),
+                    content = c.error,
+                    size = 14
+                ) { resetStep = 1 }
+            }
         }
 
         if (dash == null) {

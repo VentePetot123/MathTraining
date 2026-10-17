@@ -12,7 +12,8 @@ data class Fact(
     val prompt: String,    // shown on screen
     val answer: String,    // canonical answer
     val solution: String,  // full worked fact, e.g. "6 × 7 = 42"
-    val kind: Kind
+    val kind: Kind,
+    val note: String? = null   // optional hint shown under the answer box
 )
 
 class Category(
@@ -148,6 +149,15 @@ private fun genFactorials(lo: Int, hi: Int): List<Fact> {
     return out
 }
 
+// True when n/d (already reduced) is a repeating decimal, i.e. d has a prime
+// factor other than 2 or 5. Those are the answers that can't be typed exactly.
+private fun repeats(d: Int): Boolean {
+    var x = d
+    while (x % 2 == 0) x /= 2
+    while (x % 5 == 0) x /= 5
+    return x != 1
+}
+
 private fun genFdp(lo0: Int, hi0: Int): List<Fact> {
     val lo = maxOf(2, lo0)
     val hi = maxOf(lo, hi0)
@@ -158,8 +168,9 @@ private fun genFdp(lo0: Int, hi0: Int): List<Fact> {
         val frac = "$n/$d"
         val pct = fmt(ratio * 100, 2) + "%"
         val dec = fmt(ratio, 4)
-        map["$frac → %"] = Fact("$frac → %", "$frac = ? %", pct, "$frac = $pct", Kind.PCT)
-        map["$frac → dec"] = Fact("$frac → dec", "$frac = ? (decimal)", dec, "$frac = $dec", Kind.DEC)
+        val note = if (repeats(d)) "Repeating? Round to 2 decimals" else null
+        map["$frac → %"] = Fact("$frac → %", "$frac = ? %", pct, "$frac = $pct", Kind.PCT, note)
+        map["$frac → dec"] = Fact("$frac → dec", "$frac = ? (decimal)", dec, "$frac = $dec", Kind.DEC, note)
         if (!map.containsKey("$pct → frac")) {
             map["$pct → frac"] = Fact("$pct → frac", "$pct = ? (fraction)", frac, "$pct = $frac", Kind.FRAC)
         }

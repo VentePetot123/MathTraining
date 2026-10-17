@@ -303,11 +303,15 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     fun resetSelectedCategory() = runReset("Resetting Category") {
         engine.reset(selected.id)
         engine.flush()
+        // FIX #8: — recompute global totals from surviving stats so the header no
+        // longer counts answers that were just erased. runReset() already calls
+        // refreshMenu() after this block, so the header picks up the new values.
+        engine.recomputeTotalsFromStats()
     }
 
     fun resetAllProgress() = runReset("Resetting All Progress") {
         Categories.all.forEach { engine.reset(it.id) }
-        engine.resetTotals()          // FIX #8: wipe global counters too
+        engine.resetTotals()
         engine.flush()
     }
 

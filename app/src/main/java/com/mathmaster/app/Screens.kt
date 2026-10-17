@@ -26,6 +26,8 @@ import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
+import androidx.compose.foundation.lazy.LazyColumn
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
@@ -712,98 +714,75 @@ fun ProgressScreen(vm: TrainerViewModel) {
     val dash = vm.dashboard
     var resetStep by remember { mutableStateOf(0) }   // 0=none, 1=first, 2=second
 
-    // FIX #8: perf — outer Box so the reset overlay can be a true top layer above the
-    // scroll content and above any dialog scrim. Previously the overlay lived inside
-    // the Column and could be occluded by the fading AlertDialog when reset completed
-    // faster than the dialog's dismiss animation.
     Box(Modifier.fillMaxSize()) {
-    // FIX #8: perf — blur the dashboard behind the overlay only while a reset is
-    // running. `resetting != null` is the trigger; the blur is applied to the content
-    // itself, so the overlay on top just needs a translucent tint to complete the
-    // "frosted glass" look. blur(0.dp) below API 31 is a no-op — the tint still works.
-    Column(
-        Modifier.fillMaxSize().background(c.background)
-            .then(if (vm.resetting != null) Modifier.blur(16.dp) else Modifier)
-            .verticalScroll(rememberScrollState()).padding(20.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp)
-    ) {
-        ProgressHeader("Progress Dashboard", "All categories") { vm.toMenu() }
-
-        GradientButton(
-            "Reset All Progress",
-            Modifier.fillMaxWidth(),
-            brush = Brush.linearGradient(listOf(c.error, c.error.copy(alpha = 0.7f)))
-        ) { resetStep = 1 }
-
-        // FIX #8: perf — the transition animation runs BEFORE we mount the heavy
-        // category cards. Without this delay, all N cards try to compose on the same
-        // frame the fade begins, causing a GC pause mid-animation. A one-frame yield
-        // lets the fade play smoothly, THEN the cards mount at the end.
-        var cardsReady by remember { mutableStateOf(false) }
-        LaunchedEffect(dash) {
-            if (dash != null) {
-                // Two frames: one for the fade to begin, one for the fade to settle.
-                withFrameNanos { }
-                withFrameNanos { }
-                cardsReady = true
+        // LazyColumn composes only the cards that are on screen, so the first
+        // frame of the transition builds ~2 cards instead of 10.
+        LazyColumn(
+            modifier = Modifier
+                .fillMaxSize()
+                .background(c.background)
+                .then(if (vm.resetting != null) Modifier.blur(16.dp) else Modifier),
+            contentPadding = PaddingValues(20.dp),
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
+            item(key = "header") {
+                ProgressHeader("Progress Dashboard", "All categories") { vm.toMenu() }
             }
-        }
-
-        if (dash == null) {
-            DashboardLoadingIndicator()
-        } else {
-            Categories.all.forEach { cat ->
-                CategoryProgressSection(
-                    cat = cat,
-                    mastery = dash.mastery[cat.id] ?: Triple(0, 0, 0),
-                    history = dash.history[cat.id] ?: emptyList(),
-                    details = dash.details[cat.id] ?: emptyList(),
-                    onOpen = { vm.openCategoryDetail(cat) }
-                )
+            item(key = "resetAll") {
+                GradientButton(
+                    "Reset All Progress",
+                    Modifier.fillMaxWidth(),
+                    brush = Brush.linearGradient(listOf(c.error, c.error.copy(alpha = 0.7f)))
+                ) { resetStep = 1 }
             }
-        }
-    }
-
-    // FIX #8: perf — full-screen reset overlay. Composed only while vm.resetting != null;
-    // clears instantly when the VM drops the flag, leaving no residual scrim.
-    vm.resetting?.let { label -> ResetOverlay(label) }
-
-    if (resetStep == 1) {
-        AlertDialog(
-            onDismissRequest = { resetStep = 0 },
-            containerColor = c.surface,
-            title = { Text2("Reset ALL progress?") },
-            text = { Text2("Every category's stats, history, and mastery will be wiped. This cannot be undone.") },
-            confirmButton = {
-                TextButton(onClick = { resetStep = 2 }) { Txt("Continue", 15, FontWeight.Bold, c.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { resetStep = 0 }) { Txt("Cancel", 15, FontWeight.Medium, c.muted) }
-            }
-        )
-    }
-    if (resetStep == 2) {
-        AlertDialog(
-            onDismissRequest = { resetStep = 0 },
-            containerColor = c.surface,
-            title = { Text2("Are you absolutely sure?") },
-            text = { Text2("This is the second and final confirmation. Tap Reset to erase everything.") },
-            confirmButton = {
-                TextButton(onClick = { vm.resetAllProgress(); resetStep = 0 }) {
-                    Txt("Reset", 15, FontWeight.Bold, c.error)
+            if (dash == null) {
+                item(key = "loading") { DashboardLoadingIndicator() }
+            } else {
+                items(Categories.all, key = { it.id }) { cat ->
+                    CategoryProgressSection(
+                        cat = cat,
+                        mastery = dash.mastery[cat.id] ?: Triple(0, 0, 0),
+                        history = dash.history[cat.id] ?: emptyList(),
+                        details = dash.details[cat.id] ?: emptyList(),
+                        onOpen = { vm.openCategoryDetail(cat) }
+                    )
                 }
-            },
-            dismissButton = {
-                TextButton(onClick = { resetStep = 0 }) { Txt("Cancel", 15, FontWeight.Medium, c.muted) }
             }
-        )
-    }
+        }
 
-    // FIX #8: perf — overlay mounted at the Box level so it draws above the dialog
-    // scrim and above all scroll content. Because `resetting` is set synchronously
-    // before any coroutine, this composable is entered on the very next frame.
-    vm.resetting?.let { label -> ResetOverlay(label) }
-    }   // closes the outer Box
+        vm.resetting?.let { label -> ResetOverlay(label) }
+
+        if (resetStep == 1) {
+            AlertDialog(
+                onDismissRequest = { resetStep = 0 },
+                containerColor = c.surface,
+                title = { Text2("Reset ALL progress?") },
+                text = { Text2("Every category's stats, history, and mastery will be wiped. This cannot be undone.") },
+                confirmButton = {
+                    TextButton(onClick = { resetStep = 2 }) { Txt("Continue", 15, FontWeight.Bold, c.error) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { resetStep = 0 }) { Txt("Cancel", 15, FontWeight.Medium, c.muted) }
+                }
+            )
+        }
+        if (resetStep == 2) {
+            AlertDialog(
+                onDismissRequest = { resetStep = 0 },
+                containerColor = c.surface,
+                title = { Text2("Are you absolutely sure?") },
+                text = { Text2("This is the second and final confirmation. Tap Reset to erase everything.") },
+                confirmButton = {
+                    TextButton(onClick = { vm.resetAllProgress(); resetStep = 0 }) {
+                        Txt("Reset", 15, FontWeight.Bold, c.error)
+                    }
+                },
+                dismissButton = {
+                    TextButton(onClick = { resetStep = 0 }) { Txt("Cancel", 15, FontWeight.Medium, c.muted) }
+                }
+            )
+        }
+    }
 }
 
 // =====================================================================
@@ -862,7 +841,6 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
 
         // FIX #8: perf — same 2-frame deferral as ProgressScreen so the fade-in
         // doesn't compete with the card's composition work.
-        var cardReady by remember { mutableStateOf(false) }
         LaunchedEffect(dash) {
             if (dash != null) {
                 withFrameNanos { }

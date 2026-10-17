@@ -266,11 +266,12 @@ class AdaptiveEngine(private val store: Store) {
         val lastSeen: Long, val difficulty: Double
     )
 
+    @Synchronized
     fun details(cat: String): List<FactDetail> =
         stats(cat).map { (k, s) ->
             FactDetail(k, k, "", s.correct, s.incorrect, s.avgMs, s.lastSeen, s.difficulty)
         }
-
+    @Synchronized
     fun mastery(cat: String): Triple<Int, Int, Int> {   // (mastered%, learning%, struggling%)
         val all = stats(cat).values.filter { it.attempts > 0 }
         if (all.isEmpty()) return Triple(0, 0, 0)
@@ -280,7 +281,7 @@ class AdaptiveEngine(private val store: Store) {
         val t = all.size
         return Triple(mastered * 100 / t, learning * 100 / t, struggling * 100 / t)
     }
-
+    @Synchronized
     fun summary(cat: String): CatSummary {
         val all = stats(cat).values
         val attempts = all.sumOf { it.attempts }
@@ -291,7 +292,7 @@ class AdaptiveEngine(private val store: Store) {
             all.count { it.attempts > 0 }
         )
     }
-
+    @Synchronized
     fun reset(cat: String) {
         stats[cat] = HashMap()
         windows[cat] = mutableListOf()
@@ -313,6 +314,7 @@ class AdaptiveEngine(private val store: Store) {
     // category — so it stays as-is (it's a "how many sessions have you ever run?"
     // counter, not a "how much data is stored?" counter). `best_streak` is recomputed
     // from the max streak still present in any category.
+    @Synchronized
     fun recomputeTotalsFromStats() {
         var totalCorrect = 0
         var totalIncorrect = 0
@@ -328,6 +330,7 @@ class AdaptiveEngine(private val store: Store) {
         store.setTotals(totalCorrect + totalIncorrect, store.sessions(), bestStreak)
     }
     // FIX #8: perf — snapshot per-session aggregate for the dashboard trend chart.
+    @Synchronized
     fun recordSession(cat: String, score: Int, total: Int, avgMs: Int) {
         if (total <= 0) return
         val h = histories.getOrPut(cat) { store.loadHistory(cat) }
@@ -336,10 +339,12 @@ class AdaptiveEngine(private val store: Store) {
         dirty.add(cat)
     }
 
+    @Synchronized
     fun history(cat: String): List<SessionPoint> =
-        histories.getOrPut(cat) { store.loadHistory(cat) }
+        histories.getOrPut(cat) { store.loadHistory(cat) }.toList()
 
     /** Pool = already-practiced questions in range; unseen ones wait to be introduced. */
+    @Synchronized
     fun seed(cat: String, facts: List<Fact>, rt: SessionRuntime) {
         val st = stats(cat)
         val (seen, fresh) = facts.partition { (st[it.key]?.attempts ?: 0) > 0 }
@@ -361,6 +366,7 @@ class AdaptiveEngine(private val store: Store) {
         return w
     }
 
+    @Synchronized
     fun pick(cat: String, rt: SessionRuntime, answered: Int): Fact {
         val last = rt.recent.lastOrNull()
         val dueIdx = rt.queue.indexOfFirst { it.second <= answered && it.first.key != last }
@@ -397,6 +403,7 @@ class AdaptiveEngine(private val store: Store) {
         while (rt.recent.size > 4) rt.recent.removeFirst()
     }
 
+    @Synchronized
     fun record(cat: String, f: Fact, correct: Boolean, ms: Double): Outcome {
         val s = stats(cat).getOrPut(f.key) { QStat() }
         val n = s.attempts
@@ -438,6 +445,7 @@ class AdaptiveEngine(private val store: Store) {
     }
 
     /** Introduce a new question only when rolling accuracy over the last 10 answers >= 80%. */
+    @Synchronized
     fun introduceIfReady(cat: String, rt: SessionRuntime) {
         rt.sinceIntro++
         val w = window(cat)
@@ -451,6 +459,7 @@ class AdaptiveEngine(private val store: Store) {
         }
     }
 
+    @Synchronized
     fun flush() {
         for (cat in dirty.toList()) {
             store.saveStats(cat, stats(cat))

@@ -92,7 +92,7 @@ fun Txt(
 // FIX #8: perf — a CompositionLocal carries the "is navigating" signal to every
 // clickable. Using a local instead of `viewModel()` in bounceClick makes it usable
 // in previews, tests, and any composable — no ViewModelStoreOwner required.
-val LocalNavLock = androidx.compose.runtime.staticCompositionLocalOf { false }
+val LocalNavLock = androidx.compose.runtime.staticCompositionLocalOf<() -> Boolean> { { false } }
 
 // FIX #8: perf — snappier bounceClick. Changes vs. previous version:
 //   • Animation is a tween(140) instead of spring(500) — feels immediate, still
@@ -114,7 +114,7 @@ fun Modifier.bounceClick(
     // Read the nav lock in composition (allowed), then close over the value.
     // `rememberUpdatedState` keeps the captured value fresh across recompositions
     // without re-triggering the modifier chain.
-    val navLockState = androidx.compose.runtime.rememberUpdatedState(LocalNavLock.current)
+    val isLocked = LocalNavLock.current
     val scale by animateFloatAsState(
         targetValue = if (pressed && enabled) pressedScale else 1f,
         animationSpec = tween(durationMillis = 140),
@@ -135,7 +135,7 @@ fun Modifier.bounceClick(
             onClick = {
                 // Read the CURRENT lock value (not a stale snapshot). This is a
                 // plain State<T>.value read — legal in a callback.
-                if (navLockState.value) return@clickable
+                if (isLocked()) return@clickable
                 val now = SystemClock.uptimeMillis()
                 if (now - lastTap.longValue < DEBOUNCE_MS) return@clickable
                 lastTap.longValue = now
@@ -554,7 +554,16 @@ fun NumberInputDialog(
                     .fillMaxWidth()
                     .height(64.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(c.surfaceAlt),
+                    .background(c.surfaceAlt)
+                    // FIX #8: perf — tapping anywhere in the field requests focus on
+                    // the BasicTextField. Without this, taps on the padding (or the
+                    // box's outside area) do nothing; the user had to tap precisely
+                    // on the text itself.
+                    .clickable(
+                        interactionSource = remember { MutableInteractionSource() },
+                        indication = null,
+                        onClick = { focusRequester.requestFocus() }
+                    ),
                 contentAlignment = Alignment.Center
             ) {
                 BasicTextField(
@@ -563,12 +572,20 @@ fun NumberInputDialog(
                         val digitsOnly = newValue.text.filter { it.isDigit() }
                         when {
                             digitsOnly.length <= 2 -> {
-                                // Rebuild selection to stay at the end of the new
-                                // text. This keeps the cursor visually to the right
-                                // of the last digit at all times.
+                                // FIX #8: perf — distinguish "text changed" (typing,
+                                // backspace, paste) from "selection changed" (user
+                                // tapped inside the field). If the text changed, force
+                                // the cursor to the end. If only the selection changed,
+                                // honor the user's tap so they can position the cursor.
+                                val textChanged = digitsOnly != textFieldValue.text
+                                val newSelection = if (textChanged) {
+                                    TextRange(digitsOnly.length)
+                                } else {
+                                    newValue.selection
+                                }
                                 textFieldValue = TextFieldValue(
                                     text = digitsOnly,
-                                    selection = TextRange(digitsOnly.length),
+                                    selection = newSelection,
                                     composition = null
                                 )
                             }

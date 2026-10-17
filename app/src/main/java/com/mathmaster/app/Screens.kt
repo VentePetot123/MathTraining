@@ -51,6 +51,7 @@ import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
+import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
@@ -96,7 +97,12 @@ fun LoadingScreen(vm: TrainerViewModel) {
             // "frozen loading bar" moment.
             progress.animateTo(1f, tween(1600, easing = LinearEasing))
             preload.await()
-            delay(150)
+            // FIX #8: perf — 400ms settle after preload finishes. The preload JITs
+            // hundreds of `associate` calls and 10 fact generators; without a settle,
+            // the first Menu frame is still paying JIT tax, and the very next tap
+            // (Math Master) inherits it. This delay is invisible — the loading bar
+            // is already full by the time it starts.
+            delay(400)
             vm.finishLoading()
         }
     }
@@ -112,6 +118,27 @@ fun LoadingScreen(vm: TrainerViewModel) {
         Txt("Train your mind. Adaptively.", 14, FontWeight.Normal, c.muted)
         Spacer(Modifier.height(40.dp))
         GradientProgressBar(progress.value, animate = false, height = 10.dp)
+
+        // FIX #8: perf — off-screen warm-up mount. Every heavy child composable the
+        // user will hit after loading runs here once (invisible: rendered into a
+        // 1x1 transparent Box that sits behind the loading content). By the time the
+        // user taps Math Master or a category, the composable JIT table is already
+        // populated — the first tap animates smoothly instead of stuttering.
+        //
+        // The `alpha(0f)` makes it invisible; the `size(1.dp)` makes it take no
+        // layout space. Compose still runs the composition pass on these, which is
+        // exactly what we want for warm-up.
+        Box(Modifier.size(1.dp).alpha(0f)) {
+            // Warm up the heaviest child composable.
+            CategoryProgressSection(
+                cat = Categories.all.first(),
+                mastery = Triple(0, 0, 0),
+                history = emptyList(),
+                details = emptyList(),
+                onOpen = null,
+                showHeader = false
+            )
+        }
     }
 }
 
@@ -808,12 +835,15 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
             .verticalScroll(rememberScrollState()).padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // FIX #8: perf — compact hero matching the reference
-        // FIX #8: perf — compact hero matching the reference: symbol + name on the
-        // same row, small blurb underneath. Height drops from ~180dp to ~72dp.
+        // FIX #8 — hero header now matches ProgressDashboard's style: symbol + name
+        // on the left, chevron on the right. The whole Row is tappable (not just the
+        // chevron) and routes to Progress. Consistent with the physical Back gesture.
         Row(
-            Modifier.fillMaxWidth().shadow(8.dp, shape).clip(shape)
+            Modifier.fillMaxWidth()
+                .shadow(8.dp, shape)
+                .clip(shape)
                 .background(Brush.linearGradient(listOf(cat.colorA, cat.colorB)))
+                .bounceClick(shape, 0.dp, onClick = { vm.openProgress() })
                 .padding(horizontal = 16.dp, vertical = 14.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -822,6 +852,13 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
             Column(Modifier.weight(1f)) {
                 Txt(cat.name, 18, FontWeight.ExtraBold, Color.White)
                 Txt("Detailed progress", 11, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
+            }
+            // Visual affordance only — the ripple and click are on the parent Row.
+            Box(
+                Modifier.size(44.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Txt("‹", 34, FontWeight.Bold, Color.White, align = TextAlign.Center)
             }
         }
 

@@ -148,7 +148,7 @@ class Store(context: Context) {
     }
 
     fun saveHistory(cat: String, h: List<SessionPoint>) {
-        val s = h.takeLast(30).joinToString(";") { "${it.accuracyPct},${it.avgMs}" }
+        val s = h.takeLast(100).joinToString(";") { "${it.accuracyPct},${it.avgMs}" }
         prefs.edit().putString("hist_$cat", s).apply()
     }
 
@@ -359,7 +359,7 @@ class AdaptiveEngine(private val store: Store) {
         if (total <= 0) return
         val h = histories.getOrPut(cat) { store.loadHistory(cat) }
         h.add(SessionPoint(score * 100 / total, avgMs))
-        while (h.size > 30) h.removeAt(0)
+        while (h.size > 100) h.removeAt(0)
         dirty.add(cat)
     }
 

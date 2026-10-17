@@ -43,6 +43,8 @@ import androidx.compose.runtime.key
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
@@ -549,6 +551,47 @@ fun KeyButton(label: String, modifier: Modifier, enabled: Boolean, onClick: () -
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
     val latest = rememberUpdatedState(onClick)
+    val bg = if (pressed) c.surface else c.surfaceAlt
+    Box(
+        modifier
+            .height(52.dp)
+            .clip(RoundedCornerShape(14.dp))
+            .clickable(
+                interactionSource = interaction,
+                indication = LocalIndication.current,
+                enabled = enabled,
+                onClick = { latest.value() }
+            )
+            .background(bg),
+        contentAlignment = Alignment.Center
+    ) {
+        Txt(label, 22, FontWeight.SemiBold, c.onBackground)
+    }
+}
+
+// FIX #8: perf — hold-to-repeat backspace, matching native Android keyboard behavior.
+// Tap fires once immediately. Hold for >350ms fires once, then repeats every 40ms
+// while the finger is held. The repeat loop is a coroutine cancelled cleanly when
+// the finger lifts (because `pressed` flips and `LaunchedEffect` restarts).
+@Composable
+fun KeyButtonRepeat(label: String, modifier: Modifier, enabled: Boolean, onClick: () -> Unit) {
+    val c = AppTheme.colors
+    val interaction = remember { MutableInteractionSource() }
+    val pressed by interaction.collectIsPressedAsState()
+    val latest = rememberUpdatedState(onClick)
+
+    // Auto-repeat loop. Guarded on `enabled` so it stops if the answer is submitted
+    // (which flips enabled = false and cancels the effect).
+    LaunchedEffect(pressed, enabled) {
+        if (!pressed || !enabled) return@LaunchedEffect
+        kotlinx.coroutines.delay(350L)   // grace period before repeat kicks in
+        while (enabled) {
+            kotlinx.coroutines.delay(40L)  // ~25 characters/sec
+            if (!enabled) break
+            latest.value()
+        }
+    }
+
     val bg = if (pressed) c.surface else c.surfaceAlt
     Box(
         modifier

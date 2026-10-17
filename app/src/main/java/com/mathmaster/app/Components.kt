@@ -460,8 +460,12 @@ private fun ChartPanel(
         }
 
         Row(Modifier.fillMaxWidth().height(110.dp)) {
+            // FIX #8 — pad top/bottom of the ticks column so the "100%" / "0%" labels
+            // (and "Xs" / "0s" on the time chart) don't graze the rounded corners of
+            // the panel. The 6dp matches the inset (7dp) used in the Canvas draw, so
+            // the labels align visually with the grid lines they reference.
             Column(
-                Modifier.width(38.dp).fillMaxHeight(),
+                Modifier.width(38.dp).fillMaxHeight().padding(vertical = 6.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
                 ticks.forEach { Txt(it, 10, FontWeight.Normal, muted) }

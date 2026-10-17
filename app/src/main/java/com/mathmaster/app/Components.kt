@@ -7,6 +7,9 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
+import androidx.compose.foundation.text.BasicTextField
+import androidx.compose.foundation.text.KeyboardActions
+import androidx.compose.foundation.text.KeyboardOptions
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
@@ -25,16 +28,27 @@ import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.shape.CircleShape
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.material3.AlertDialog
+import androidx.compose.runtime.key
+import androidx.compose.ui.window.Dialog
+import androidx.compose.ui.window.DialogProperties
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
+import android.os.SystemClock
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
+import androidx.compose.ui.focus.FocusRequester
+import androidx.compose.ui.focus.focusRequester
+import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.text.TextStyle
+import androidx.compose.ui.text.input.ImeAction
+import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
@@ -86,6 +100,11 @@ fun Modifier.bounceClick(
         animationSpec = spring(dampingRatio = 0.55f, stiffness = 500f),
         label = "pressScale"
     )
+    // FIX #8: perf — debounce guard. `clickable` consumes the touch itself, but a
+    // rapid double-tap on the same control still fires onClick twice. Track the last
+    // accepted tap time; reject any tap within DEBOUNCE_MS of the previous one.
+    // This makes every control in the app single-tap-safe without changing call sites.
+    val lastTap = remember { mutableLongStateOf(0L) }
     this
         .graphicsLayer {
             scaleX = scale
@@ -98,9 +117,18 @@ fun Modifier.bounceClick(
             interactionSource = source,
             indication = LocalIndication.current,
             enabled = enabled,
-            onClick = onClick
+            onClick = {
+                val now = SystemClock.uptimeMillis()
+                if (now - lastTap.longValue < DEBOUNCE_MS) return@clickable
+                lastTap.longValue = now
+                onClick()
+            }
         )
 }
+
+// FIX #8: perf — 350ms covers accidental double-taps without making the UI feel
+// sluggish. Typical touchscreen double-tap threshold is 300ms; we go slightly above.
+private const val DEBOUNCE_MS = 350L
 
 @Composable
 fun GradientButton(
@@ -454,6 +482,11 @@ fun RoundButtonSmall(text: String, onClick: () -> Unit) {
 // FIX #8: perf — compact numeric entry dialog used by the range steppers. Reuses the
 // same keypad layout as the training screen (1-9, C, 0, ⌫) but keeps its own local
 // buffer so the current value isn't overwritten until the user confirms.
+// FIX #8: perf — numeric entry dialog driven by the SYSTEM keyboard in number mode.
+// Uses BasicTextField with KeyboardType.Number, so the phone shows its numeric pad
+// (not the full QWERTY). The field gets a real blinking cursor and standard text
+// editing (selection, backspace) from the platform. Input is capped at 2 digits;
+// a 3rd digit is rejected and triggers the MaxDigitsToast.
 @Composable
 fun NumberInputDialog(
     initial: Int,
@@ -462,13 +495,14 @@ fun NumberInputDialog(
 ) {
     val c = AppTheme.colors
     var buffer by remember { mutableStateOf(initial.toString()) }
+    var maxDigitsTick by remember { mutableStateOf(0) }
+    val focusRequester = remember { FocusRequester() }
 
-    fun append(d: Char) {
-        if (buffer.length >= 2) return                // max 2 digits (<=99)
-        buffer = if (buffer == "0") d.toString() else buffer + d
+    // FIX #8: perf — open the soft keyboard automatically and put the caret at the
+    // end, so the user can start typing immediately without tapping the field.
+    LaunchedEffect(Unit) {
+        focusRequester.requestFocus()
     }
-    fun clear() { buffer = "" }
-    fun backspace() { buffer = buffer.dropLast(1) }
 
     AlertDialog(
         onDismissRequest = onDismiss,
@@ -477,43 +511,45 @@ fun NumberInputDialog(
         textContentColor = c.muted,
         title = { Txt("Enter value (1–99)", 16, FontWeight.Bold) },
         text = {
-            Column(
-                Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(10.dp)
-            ) {
-                // Live preview of the current buffer
-                Box(
-                    Modifier
-                        .fillMaxWidth()
-                        .height(52.dp)
-                        .clip(RoundedCornerShape(12.dp))
-                        .background(c.surfaceAlt),
-                    contentAlignment = Alignment.Center
-                ) {
-                    Txt(
-                        if (buffer.isEmpty()) "—" else buffer,
-                        24,
-                        FontWeight.Bold,
-                        if (buffer.isEmpty()) c.muted else c.onBackground,
-                        align = TextAlign.Center
-                    )
-                }
-
-                // 3x4 mini keypad — same layout as the training keypad, but self-contained
-                for (row in listOf(listOf("1","2","3"), listOf("4","5","6"), listOf("7","8","9"))) {
-                    Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                        row.forEach { k ->
-                            MiniKey(k, Modifier.weight(1f)) { append(k[0]) }
+            BasicTextField(
+                value = buffer,
+                onValueChange = { new ->
+                    // Keep only digits (safety net for paste / autofill)
+                    val digitsOnly = new.filter { it.isDigit() }
+                    when {
+                        digitsOnly.length <= 2 -> buffer = digitsOnly
+                        else -> {
+                            // User tried to type a 3rd digit — reject and warn.
+                            maxDigitsTick++
                         }
                     }
-                }
-                Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
-                    MiniKey("C", Modifier.weight(1f)) { clear() }
-                    MiniKey("0", Modifier.weight(1f)) { append('0') }
-                    MiniKey("⌫", Modifier.weight(1f)) { backspace() }
-                }
-            }
+                },
+                singleLine = true,
+                keyboardOptions = KeyboardOptions(
+                    keyboardType = KeyboardType.Number,
+                    imeAction = ImeAction.Done
+                ),
+                keyboardActions = KeyboardActions(
+                    onDone = {
+                        val parsed = buffer.toIntOrNull()
+                        if (parsed != null && parsed in 1..99) onConfirm(parsed)
+                    }
+                ),
+                cursorBrush = SolidColor(c.accentA),
+                textStyle = TextStyle(
+                    color = c.onBackground,
+                    fontSize = 28.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                ),
+                modifier = Modifier
+                    .fillMaxWidth()
+                    .height(64.dp)
+                    .clip(RoundedCornerShape(12.dp))
+                    .background(c.surfaceAlt)
+                    .focusRequester(focusRequester)
+                    .padding(horizontal = 12.dp)
+            )
         },
         confirmButton = {
             val parsed = buffer.toIntOrNull()
@@ -534,17 +570,65 @@ fun NumberInputDialog(
             TextButton(onClick = onDismiss) { Txt("Cancel", 15, FontWeight.Medium, c.muted) }
         }
     )
+
+    // FIX #8: perf — toast overlay in its own Dialog so it draws above the AlertDialog.
+    if (maxDigitsTick > 0) {
+        key(maxDigitsTick) {
+            Dialog(
+                onDismissRequest = { /* non-interactive; auto-dismisses via fade */ },
+                properties = DialogProperties(
+                    dismissOnBackPress = false,
+                    dismissOnClickOutside = false,
+                    usePlatformDefaultWidth = false
+                )
+            ) {
+                MaxDigitsToast()
+            }
+        }
+    }
 }
 
+// FIX #8: perf — brief full-screen warning shown when the user tries to exceed the
+// digit cap. Rendered as an overlay sibling so it never invalidates the dialog's
+// layout. Fade in → hold → fade out, then it's removed from composition entirely.
+// Uses graphicsLayer + alpha only; no layout animations, no per-frame allocations.
 @Composable
-private fun MiniKey(label: String, modifier: Modifier, onClick: () -> Unit) {
-    val c = AppTheme.colors
+fun MaxDigitsToast(message: String = "Max Digits") {
+    val alpha = remember(message) { Animatable(0f) }
+    LaunchedEffect(message) {
+        alpha.animateTo(1f, tween(140, easing = FastOutSlowInEasing))
+        kotlinx.coroutines.delay(600)
+        alpha.animateTo(0f, tween(220, easing = FastOutSlowInEasing))
+    }
+
     Box(
-        modifier
-            .height(40.dp)
-            .bounceClick(RoundedCornerShape(10.dp), 0.dp, onClick = onClick),
+        Modifier
+            .fillMaxSize()
+            .graphicsLayer { this.alpha = alpha.value }
+            // FIX #8: perf — block touches so the underlying keypad can't receive input
+            // while the toast is visible.
+            .clickable(
+                interactionSource = remember { MutableInteractionSource() },
+                indication = null,
+                onClick = {}
+            )
+            .background(Color(0x660F1020)),       // light scrim, ~40% opacity
         contentAlignment = Alignment.Center
     ) {
-        Txt(label, 16, FontWeight.Bold, c.onBackground, align = TextAlign.Center)
+        Box(
+            Modifier
+                .shadow(8.dp, RoundedCornerShape(18.dp))
+                .clip(RoundedCornerShape(18.dp))
+                .background(AppTheme.colors.surface)
+                .padding(horizontal = 24.dp, vertical = 16.dp)
+        ) {
+            Txt(
+                message,
+                18,
+                FontWeight.ExtraBold,
+                AppTheme.colors.onBackground,
+                align = TextAlign.Center
+            )
+        }
     }
 }

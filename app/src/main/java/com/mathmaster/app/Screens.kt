@@ -88,9 +88,13 @@ fun LoadingScreen(vm: TrainerViewModel) {
             // was showing up mid-slide on the very first transition after cold start.
             // `preload.await()` still gates on real work; this is just an upper bound
             // on how long we wait for the animation to look smooth.
-            progress.animateTo(1f, tween(1400, easing = LinearEasing))
+            // FIX #8: perf — 1600ms covers the pre-warm pass (JIT compilation of
+            // every generator, screen, and card) plus the settle delay. The bar
+            // moves smoothly for the entire warm-up, so the user never sees a
+            // "frozen loading bar" moment.
+            progress.animateTo(1f, tween(1600, easing = LinearEasing))
             preload.await()
-            delay(120)
+            delay(150)
             vm.finishLoading()
         }
     }

@@ -313,6 +313,20 @@ fun RangeScreen(vm: TrainerViewModel) {
             }
         }
 
+        // FIX #8 — FDP-only hint below "Questions per session". Explains the
+        // infinite-decimal rounding rule so the user knows what to type when they
+        // see a fraction like 1/3 that doesn't terminate.
+        if (cat.id == "fdp") {
+            Txt(
+                "4 Decimal Places Only for Infinite Decimals",
+                11,
+                FontWeight.Medium,
+                c.muted,
+                Modifier.fillMaxWidth(),
+                TextAlign.Center
+            )
+        }
+
         // ---- Compact stat line ----
         val s = vm.menuStats[cat.id]
         val statText = if (s == null || s.attempts == 0) "No practice data yet for this category"
@@ -510,6 +524,13 @@ fun QuestionCard(u: UiSession) {
 
         Txt(fact.prompt, promptSize, FontWeight.ExtraBold, c.onBackground, Modifier.fillMaxWidth(), TextAlign.Center)
 
+        // FIX #8 — show the rounding rule (if any) while the user is typing.
+        // This is different from `u.hint` (which is only used for format errors
+        // like "check the answer format"). This is a persistent per-fact note.
+        if (fact.note != null) {
+            Txt(fact.note, 11, FontWeight.Medium, c.muted, Modifier.fillMaxWidth(), TextAlign.Center)
+        }
+
         val borderColor = when (u.feedback) {
             Feedback.Correct -> c.success
             Feedback.Wrong -> c.error
@@ -571,8 +592,6 @@ fun QuestionCard(u: UiSession) {
                 Feedback.None -> {
                     if (u.hint != null) {
                         Txt(u.hint, 14, FontWeight.Medium, c.warning)
-                    } else if (fact.note != null) {
-                        Txt(fact.note, 12, FontWeight.Medium, c.muted, Modifier.fillMaxWidth(), TextAlign.Center)
                     }
                 }
             }

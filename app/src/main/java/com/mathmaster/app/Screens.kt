@@ -473,7 +473,6 @@ fun QuestionCard(u: UiSession) {
     }
 
     val feedbackColor = if (u.feedback == Feedback.Wrong) c.error else c.success
-    // FIX #15: prompt length is stable for a given fact; remember across keystrokes.
     val promptSize = remember(fact.key) { if (fact.prompt.length > 14) 30 else 44 }
 
     Column(
@@ -499,6 +498,13 @@ fun QuestionCard(u: UiSession) {
             Feedback.Wrong -> c.error
             Feedback.None -> c.accentA.copy(alpha = 0.5f)
         }
+        val inputSize = when {
+            u.input.length <= 8 -> 30
+            u.input.length <= 11 -> 24
+            u.input.length <= 16 -> 19
+            u.input.length <= 24 -> 15
+            else -> 12
+        }
         Box(
             Modifier
                 .fillMaxWidth()
@@ -508,28 +514,19 @@ fun QuestionCard(u: UiSession) {
                 .border(2.dp, borderColor, RoundedCornerShape(16.dp)),
             contentAlignment = Alignment.Center
         ) {
-            if (u.input.isEmpty()) Txt("?", 28, FontWeight.Bold, c.muted)
-            else Txt(
-                u.input,
-                when {
-                    u.input.length <= 8 -> 30
-                    u.input.length <= 11 -> 24
-                    u.input.length <= 16 -> 19
-                    u.input.length <= 24 -> 15
-                    else -> 12
-                },
-                FontWeight.Bold,
-                c.onBackground,
-                Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                TextAlign.Center
-            )
+            if (u.input.isEmpty()) {
+                Txt("?", 28, FontWeight.Bold, c.muted)
+            } else {
+                Txt(
+                    u.input, inputSize, FontWeight.Bold, c.onBackground,
+                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
+                    TextAlign.Center
+                )
+            }
         }
 
         Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) {
             when (u.feedback) {
-                // FIX #12: unified feedback strip — shown for every category, same format.
-                // The animated FeedbackMark (Canvas) is the ONLY symbol; the text is
-                // just "<answer> <time>s" so we don't render a duplicate Unicode glyph.
                 Feedback.Correct -> Row(
                     verticalAlignment = Alignment.CenterVertically,
                     horizontalArrangement = Arrangement.spacedBy(10.dp)
@@ -553,11 +550,12 @@ fun QuestionCard(u: UiSession) {
                 Feedback.None -> {
                     if (u.hint != null) {
                         Txt(u.hint, 14, FontWeight.Medium, c.warning)
-                    }
-                    if (u.hint == null && fact.note != null) {
+                    } else if (fact.note != null) {
                         Txt(fact.note, 12, FontWeight.Medium, c.muted, Modifier.fillMaxWidth(), TextAlign.Center)
                     }
                 }
+            }
+        }
     }
 }
 

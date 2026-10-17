@@ -111,6 +111,16 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     var resetting by mutableStateOf<String?>(null)
         private set
 
+    // FIX #8 — scroll positions preserved across navigation. The menu grid and the
+    // progress dashboard each get their own LazyListState. Because the state lives in
+    // the ViewModel (not in a `remember` block inside the composable), it survives
+    // screen destruction when the user navigates away and returns.
+    //
+    // We don't need `saveable` because the ViewModel is itself retained across
+    // configuration changes (rotation) — this preserves scroll across rotation too.
+    val menuScrollState = androidx.compose.foundation.lazy.grid.LazyGridState()
+    val progressScrollState = androidx.compose.foundation.lazy.LazyListState()
+
     fun loadDashboard() {
         // FIX #8: perf — mark loading so the UI can render a progress bar; clear
         // the flag only after the new dashboard snapshot is committed.
@@ -269,7 +279,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         val s = store.loadSettings(c.id)
         rangeMin = (s?.first ?: c.defMin).coerceIn(1, c.hardMax)
         rangeMax = (s?.second ?: c.defMax).coerceIn(rangeMin, c.hardMax)
-        questionCount = (s?.third ?: 20).coerceIn(5, 200)
+        questionCount = (s?.third ?: 20).coerceIn(1, 200)
     }
 
     fun onBack() {
@@ -334,8 +344,10 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun setCount(v: Int) {
-        // Questions don't need the 99 cap — they legitimately go higher. Keep 5..200.
-        questionCount = v.coerceIn(5, 200)
+        // FIX #8 — allow 1..200 for question count. Previously the min was 5, which
+        // silently bumped a user typing "2" up to 5. Now the minimum is 1 and the
+        // maximum is 200 (the hard upper bound the dialog enforces).
+        questionCount = v.coerceIn(1, 200)
     }
 
     fun applyPreset(a: Int, b: Int) {

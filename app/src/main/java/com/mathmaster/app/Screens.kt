@@ -280,8 +280,12 @@ fun RangeScreen(vm: TrainerViewModel) {
         // ---- Number range card ----
         CompactCard {
             Txt(if (cat.usesFractionKeys) "Denominator range" else "Number range", 15, FontWeight.Bold)
-            Stepper("From", vm.rangeMin, 1) { vm.setMin(it) }
-            Stepper("To", vm.rangeMax, 1) { vm.setMax(it) }
+            // FIX #8 — hardMax passed so the dialog's title says "Enter value (1–30)"
+            // for categories with a low limit (FDP, Powers, Factorials), and "Enter
+            // value (1–99)" for the arithmetic categories. No more typing 100+ for
+            // a category that only supports 30.
+            Stepper("From", vm.rangeMin, 1, hardMax = cat.hardMax) { vm.setMin(it) }
+            Stepper("To", vm.rangeMax, 1, hardMax = cat.hardMax) { vm.setMax(it) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 cat.presets().forEach { (a, b) ->
                     SoftButton("$a–$b", Modifier.weight(1f), size = 12) { vm.applyPreset(a, b) }
@@ -511,17 +515,21 @@ fun QuestionCard(u: UiSession) {
             Feedback.Wrong -> c.error
             Feedback.None -> c.accentA.copy(alpha = 0.5f)
         }
+        // FIX #8 — the input box needs to grow vertically for long inputs, but stay
+        // bounded (max 120dp) so it can't crash into the keypad. Text size also
+        // shrinks as input length grows: 30sp for ≤8 chars, down to 12sp at 30+ chars.
         val inputSize = when {
             u.input.length <= 8 -> 30
             u.input.length <= 11 -> 24
-            u.input.length <= 16 -> 19
-            u.input.length <= 24 -> 15
-            else -> 12
+            u.input.length <= 16 -> 20
+            u.input.length <= 22 -> 16
+            u.input.length <= 30 -> 13
+            else -> 11
         }
         Box(
             Modifier
                 .fillMaxWidth()
-                .height(64.dp)
+                .heightIn(min = 64.dp, max = 120.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(c.surfaceAlt)
                 .border(2.dp, borderColor, RoundedCornerShape(16.dp)),
@@ -530,21 +538,9 @@ fun QuestionCard(u: UiSession) {
             if (u.input.isEmpty()) {
                 Txt("?", 28, FontWeight.Bold, c.muted)
             } else {
-                // FIX #8 — dynamically shrink font size based on input length so long
-                // numbers (e.g., "0.333333333333") stay fully visible inside the box.
-                val fontSize = when {
-                    u.input.length <= 8 -> 30
-                    u.input.length <= 12 -> 24
-                    u.input.length <= 16 -> 20
-                    u.input.length <= 24 -> 16
-                    else -> 13
-                }
                 Txt(
-                    u.input, 
-                    fontSize, 
-                    FontWeight.Bold, 
-                    c.onBackground, 
-                    Modifier.padding(horizontal = 8.dp),
+                    u.input, inputSize, FontWeight.Bold, c.onBackground,
+                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
                     TextAlign.Center
                 )
             }

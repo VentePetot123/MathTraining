@@ -364,6 +364,8 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun applyPreset(a: Int, b: Int) {
+        // FIX #8 — use the category's hardMax (not hardcoded 99) so presets respect
+        // the per-category limit (30 for FDP/Powers, 20 for Factorials).
         rangeMin = a.coerceIn(1, selected.hardMax)
         rangeMax = b.coerceIn(rangeMin, selected.hardMax)
     }
@@ -432,21 +434,16 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         // in flight, we must not touch ui/runtime/countdown because we might bail
         // inside navigateTo and leave dangling state behind.
         if (isNavigating) return
-        // FIX #8 — allow startSession from Range, Results, AND CategoryDetail.
-        // The CategoryDetail screen's "Start Practice" button routes here, but the
-        // old guard only allowed Range and Results, so taps on CategoryDetail were
-        // silently ignored.
-        if (screen != Screen.Range &&
-            screen != Screen.Results &&
-            screen != Screen.CategoryDetail
-        ) return
+        if (screen != Screen.Range && screen != Screen.Results && screen != Screen.CategoryDetail) return
 
         advanceJob?.cancel()
         val c = selected
         val facts = factsFor(c, rangeMin, rangeMax)
         if (facts.isEmpty()) return
         store.saveSettings(c.id, rangeMin, rangeMax, questionCount)
-        store.bumpSessions()
+        // FIX #8 — session count is incremented in finish(), not here. This way
+        // abandoning a session (via Quit/Back mid-session) doesn't inflate the
+        // "sessions" counter — only completed sessions count.
 
         val rt = SessionRuntime()
         engine.seed(c.id, facts, rt)
@@ -512,7 +509,10 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     fun onKey(k: String) {
         val u = ui ?: return
         if (u.feedback != Feedback.None) return
-        if (u.input.length >= 12) return
+        // FIX #8 — allow up to 15 characters (covers longest reasonable decimals and
+        // fractions) instead of 12. The UI box will expand up to 120dp and shrink
+        // font accordingly; 15 chars is the practical limit for readability.
+        if (u.input.length >= 15) return
         ui = u.copy(input = u.input + k, hint = null)
     }
 
@@ -592,9 +592,6 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     private fun finish() {
-        // FIX #8: perf — if the user already left Training (Quit pressed while the last
-        // question's feedback was visible), do not navigate to Results. Results must
-        // only appear as a consequence of a natural session end.
         if (screen != Screen.Training) return
         val u = ui ?: return
         val rt = runtime ?: return
@@ -602,8 +599,12 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         val score = u.score
         val total = u.total
         val avgMs = if (rt.answerCount > 0) (rt.totalMs / rt.answerCount).toInt() else 0
-        // Persist on IO; navigation happens via navigateTo below.
+        // FIX #8 — bump the session count only when the session is finished (not on
+        // start). This means abandoning a session mid-way via Quit/Back does not
+        // count as a completed session. Persist everything on IO; navigation happens
+        // via navigateTo below.
         viewModelScope.launch(Dispatchers.IO) {
+            store.bumpSessions()
             engine.recordSession(cat, score, total, avgMs)
             engine.flush()
             val fresh = buildDashboard()

@@ -337,6 +337,23 @@ fun Stepper(
     maxValue: Int = 99,
     onChange: (Int) -> Unit
 ) {
+    // FIX #8 — snap to multiples of `step` when the current value is off-step.
+    // E.g. with step = 5:
+    //   minus(4) = 1     (4 → next lower multiple → none in range → 1)
+    //   minus(6) = 5
+    //   minus(20) = 15
+    //   plus(4)  = 5
+    //   plus(6)  = 10
+    //   plus(20) = 25
+    fun nextUp(v: Int): Int {
+        val snapped = ((v / step) + 1) * step
+        return snapped.coerceIn(1, maxValue)
+    }
+    fun nextDown(v: Int): Int {
+        // If v is exactly on a multiple, step down one; else round down to nearest.
+        val snapped = if (v % step == 0) v - step else (v / step) * step
+        return snapped.coerceIn(1, maxValue)
+    }
     val c = AppTheme.colors
     // FIX #8: perf — the middle value is now tap-to-edit. Tapping it opens a compact
     // numeric keypad dialog; confirming clamps the value to 1..99 before calling
@@ -345,7 +362,7 @@ fun Stepper(
 
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Txt(label, 13, FontWeight.Medium, c.muted, Modifier.weight(1f))
-        RoundButtonSmall("−") { onChange((value - step).coerceIn(1, maxValue)) }
+        RoundButtonSmall("−") { onChange(nextDown(value)) }
         // Tap target for the value
         Box(
             Modifier
@@ -355,7 +372,7 @@ fun Stepper(
         ) {
             Txt(value.toString(), 18, FontWeight.Bold, c.onBackground, align = TextAlign.Center)
         }
-        RoundButtonSmall("+") { onChange((value + step).coerceIn(1, maxValue)) }
+        RoundButtonSmall("+") { onChange(nextUp(value)) }
     }
 
     if (editing) {
@@ -372,119 +389,131 @@ fun Stepper(
     }
 }
 
-// FIX #8: perf — Compose-native trend chart. Draws in a single Canvas pass; no
-// per-frame allocations (paths and gradients are remembered on the input data).
-//   • teal line  = accuracy % (y 0..180 as required by spec)
-//   • pink line  = inverse-scaled avg response time (lower ms → higher y)
-//   • cubic-bezier smoothing, filled gradient below each line, no point markers.
 @Composable
 fun TrendChart(
     history: List<SessionPoint>,
     modifier: Modifier = Modifier
 ) {
     if (history.size < 2) {
-        // FIX #8: perf — compact empty state (was 160dp; the tall box dominated the
-        // dashboard card when there was no data yet).
         Box(
             modifier.fillMaxWidth().height(96.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(Color(0xFF1B2233)),
             contentAlignment = Alignment.Center
         ) {
-            Txt("Practice more to see your trend", 12, FontWeight.Medium, Color.White.copy(alpha = 0.6f))
+            Txt("Finish 2 sessions to see your trend", 12, FontWeight.Medium, Color.White.copy(alpha = 0.6f))
         }
         return
     }
 
-    val panel = Color(0xFF1B2233)
-    val grid = Color.White.copy(alpha = 0.06f)
-    val teal = Color(0xFF3DD9A0)
-    val pink = Color(0xFFE64C8A)
-    val axis = Color.White.copy(alpha = 0.55f)
-
+    val n = history.size
     val accuracy = remember(history) { history.map { it.accuracyPct.toFloat().coerceIn(0f, 100f) } }
-    val times = remember(history) {
-        val maxMs = history.maxOf { it.avgMs }.coerceAtLeast(1)
-        history.map { 100f * (1f - it.avgMs.toFloat() / maxMs) }   // inverse-scale
+    val seconds = remember(history) { history.map { it.avgMs / 1000f } }
+    // Round the time axis up to a multiple of 4 so all five labels are whole seconds.
+    val step = remember(seconds) {
+        kotlin.math.ceil((seconds.maxOrNull() ?: 1f) / 4.0).toInt().coerceAtLeast(1)
     }
 
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
-    Row(horizontalArrangement = Arrangement.spacedBy(14.dp)) {
-        Txt("● Accuracy", 11, FontWeight.SemiBold, teal)
-        Txt("● Speed (higher = faster)", 11, FontWeight.SemiBold, pink)
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+        ChartPanel(
+            title = "Accuracy · last $n sessions",
+            values = accuracy,
+            yMax = 100f,
+            color = Color(0xFF3DD9A0),
+            ticks = listOf("100%", "75%", "50%", "25%", "0%"),
+            latest = "${accuracy.last().toInt()}%"
+        )
+        ChartPanel(
+            title = "Time per answer · lower is better",
+            values = seconds,
+            yMax = (step * 4).toFloat(),
+            color = Color(0xFFE64C8A),
+            ticks = listOf("${step * 4}s", "${step * 3}s", "${step * 2}s", "${step}s", "0s"),
+            latest = String.format(java.util.Locale.US, "%.1fs", seconds.last())
+        )
     }
-    Canvas(
+}
+
+@Composable
+private fun ChartPanel(
+    title: String,
+    values: List<Float>,
+    yMax: Float,
+    color: Color,
+    ticks: List<String>,          // top → bottom, 5 labels
+    latest: String
+) {
+    val muted = Color.White.copy(alpha = 0.6f)
+    val grid = Color.White.copy(alpha = 0.08f)
+
+    Column(
         Modifier
             .fillMaxWidth()
-            .height(160.dp)
             .clip(RoundedCornerShape(14.dp))
-            .background(panel)
-            .padding(12.dp)
+            .background(Color(0xFF1B2233))
+            .padding(12.dp),
+        verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
-        val w = size.width
-        val h = size.height
-        val left = 4.dp.toPx()
-        val bottom = 20.dp.toPx()
-        val plotW = w - left
-        val plotH = h - bottom
-
-        // Y grid: 10 ticks over 0..180
-        for (i in 0..10) {
-            val y = plotH - plotH * (i / 10f)
-            drawLine(grid, Offset(left, y), Offset(w, y), 1f)
-            // tiny muted y label
+        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
+            Txt(title, 11, FontWeight.SemiBold, color)
+            Txt("Latest $latest", 11, FontWeight.Bold, Color.White)
         }
 
-        // X grid: one per session
-        val n = history.size
-        val stepX = if (n > 1) plotW / (n - 1) else plotW
-        fun x(i: Int) = left + stepX * i
-        for (i in 0 until n) {
-            drawLine(grid, Offset(x(i), 0f), Offset(x(i), plotH), 1f)
-        }
-
-        fun yFor(v: Float) = plotH - plotH * (v.coerceIn(0f, 100f) / 100f)
-
-        // Build smooth cubic path through points
-        fun buildPath(values: List<Float>): Path {
-            val p = Path()
-            if (values.isEmpty()) return p
-            p.moveTo(x(0), yFor(values[0]))
-            for (i in 0 until values.size - 1) {
-                val x0 = x(i); val y0 = yFor(values[i])
-                val x1 = x(i + 1); val y1 = yFor(values[i + 1])
-                val cx = (x0 + x1) / 2f
-                p.cubicTo(cx, y0, cx, y1, x1, y1)
+        Row(Modifier.fillMaxWidth().height(110.dp)) {
+            Column(
+                Modifier.width(38.dp).fillMaxHeight(),
+                verticalArrangement = Arrangement.SpaceBetween
+            ) {
+                ticks.forEach { Txt(it, 10, FontWeight.Normal, muted) }
             }
-            return p
-        }
 
-        fun fillUnder(p: Path, values: List<Float>, color: Color) {
-            val f = Path().apply {
-                addPath(p)
-                lineTo(x(values.size - 1), plotH)
-                lineTo(x(0), plotH)
-                close()
-            }
-            drawPath(
-                f,
-                brush = Brush.verticalGradient(
-                    colors = listOf(color.copy(alpha = 0.35f), color.copy(alpha = 0f)),
-                    startY = 0f, endY = plotH
+            Canvas(Modifier.weight(1f).fillMaxHeight()) {
+                val w = size.width
+                val inset = 7.dp.toPx()
+                val plotH = size.height - inset * 2
+                val n = values.size
+                fun x(i: Int) = if (n > 1) w * i / (n - 1) else 0f
+                fun y(v: Float) = inset + plotH - plotH * (v.coerceIn(0f, yMax) / yMax)
+
+                for (f in floatArrayOf(0f, 0.25f, 0.5f, 0.75f, 1f)) {
+                    val gy = y(yMax * f)
+                    drawLine(grid, Offset(0f, gy), Offset(w, gy), 1f)
+                }
+
+                val line = Path()
+                line.moveTo(x(0), y(values[0]))
+                for (i in 0 until n - 1) {
+                    val cx = (x(i) + x(i + 1)) / 2f
+                    line.cubicTo(cx, y(values[i]), cx, y(values[i + 1]), x(i + 1), y(values[i + 1]))
+                }
+
+                val fill = Path().apply {
+                    addPath(line)
+                    lineTo(x(n - 1), y(0f))
+                    lineTo(x(0), y(0f))
+                    close()
+                }
+                drawPath(
+                    fill,
+                    brush = Brush.verticalGradient(
+                        colors = listOf(color.copy(alpha = 0.30f), color.copy(alpha = 0f)),
+                        startY = inset, endY = inset + plotH
+                    )
                 )
-            )
+                drawPath(line, color, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
+                drawCircle(color, 3.5.dp.toPx(), Offset(x(n - 1), y(values[n - 1])))
+            }
         }
 
-        val accPath = buildPath(accuracy)
-        val timePath = buildPath(times)
-
-        fillUnder(timePath, times, pink)
-        fillUnder(accPath, accuracy, teal)
-
-        drawPath(accPath, teal, style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round))
-    }   // closes Canvas
-    }   // closes Column  <-- new
-}       // closes TrendChart
+        Row(
+            Modifier.fillMaxWidth().padding(start = 38.dp),
+            horizontalArrangement = Arrangement.SpaceBetween
+        ) {
+            Txt("Oldest", 10, FontWeight.Normal, muted)
+            Txt("Latest", 10, FontWeight.Normal, muted)
+        }
+    }
+}
 
 @Composable
 fun RoundButton(text: String, onClick: () -> Unit) {
@@ -565,7 +594,7 @@ fun NumberInputDialog(
         containerColor = c.surface,
         titleContentColor = c.onBackground,
         textContentColor = c.muted,
-        title = { Txt("Enter value (1–99)", 16, FontWeight.Bold) },
+        title = { Txt("Enter value (1–$maxValue)", 16, FontWeight.Bold) },
         text = {
             // FIX #8: — single BasicTextField, no overlay. Text is centered via
             // TextAlign.Center; cursor sits at `selection.start` which we pin to

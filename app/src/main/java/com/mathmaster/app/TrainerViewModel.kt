@@ -547,7 +547,14 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
             lastMs = ms,
             hint = null
         )
-        if ((u.answered + 1) % 5 == 0) engine.flush()
+        // FIX #8 — move the periodic flush off the main thread. Under heavy use (many
+        // sessions accumulated), engine.flush() serializes every dirty category to JSON
+        // and writes to SharedPreferences, which can take 100-150ms. Running it on the
+        // main thread here would cause a one-frame hitch every 5th answer. Dispatching
+        // to IO keeps the UI perfectly smooth while the flush happens in the background.
+        if ((u.answered + 1) % 5 == 0) {
+            viewModelScope.launch(Dispatchers.IO) { engine.flush() }
+        }
 
         advanceJob?.cancel()
         advanceJob = viewModelScope.launch {

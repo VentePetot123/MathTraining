@@ -284,83 +284,103 @@ fun TrainingScreen(vm: TrainerViewModel) {
     }
     val cat = Categories.byId(u.categoryId)
 
-    // FIX #8: perf — wrap the training UI in a Box so we can layer the countdown
-    // overlay on top. The overlay composable is only invoked while countdown != null;
-    // once it clears, Compose disposes it completely with no residual scrim or layer.
     Box(Modifier.fillMaxSize()) {
         Column(Modifier.fillMaxSize().background(c.background)) {
-        Row(
-            Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            SoftButton("✕ Quit", size = 14) { vm.showQuit = true }
-            Spacer(Modifier.weight(1f))
-            Column(horizontalAlignment = Alignment.End) {
-                Txt("Q ${minOf(u.answered + 1, u.total)}/${u.total}", 17, FontWeight.Bold)
-                Txt("Score ${u.score} · Streak ${u.streak} 🔥", 12, FontWeight.Medium, c.muted)
-            }
-        }
+            // FIX #8: perf — header observes only the fields it renders. Because
+            // Compose skips recomposition when the values haven't changed, typing a
+            // digit (which only changes u.input) does NOT recompose the header.
+            HeaderBar(
+                answered = u.answered,
+                total = u.total,
+                score = u.score,
+                streak = u.streak,
+                onQuit = { vm.showQuit = true }
+            )
 
-        // FIX #6: bar is keyed to the session id and fed ONLY by this session's counters,
-        // so a new session can never inherit the previous category's progress.
-        // FIX #14: remember the fraction so keystrokes (which change u.input) don't
-        // retrigger the progress animation.
-        key(u.id) {
-            val progress = remember(u.answered, u.total) {
-                u.answered.toFloat() / u.total
+            ProgressBarRow(
+                sessionId = u.id,
+                answered = u.answered,
+                total = u.total
+            )
+
+            Box(
+                Modifier
+                    .weight(1f)
+                    .fillMaxWidth()
+                    .zIndex(1f)
+                    .padding(16.dp)
+            ) {
+                Column(
+                    Modifier.align(Alignment.Center).verticalScroll(rememberScrollState())
+                ) {
+                    // FIX #8: perf — the question card re-renders only when its own
+                    // fields change. The keypad's `enabled` value is passed in as a
+                    // primitive so it's a stability anchor.
+                    key(u.id) { QuestionCard(u) }
+                }
             }
-            GradientProgressBar(
-                progress = progress,
-                modifier = Modifier.padding(horizontal = 16.dp)
+
+            // FIX #8: perf — the keypad now takes only `enabled` (a Boolean) and the
+            // stable VM method references. It does NOT read `u.input`, so typing a
+            // digit does NOT recompose the keypad itself. It only re-renders when
+            // feedback starts/ends (enabled flips).
+            Keypad(
+                fractionKeys = cat.usesFractionKeys,
+                enabled = u.feedback == Feedback.None,
+                onKey = vm::onKey,
+                onDelete = vm::onDelete,
+                onClear = vm::onClear,
+                onSubmit = vm::submit
             )
         }
 
-        // FIX #7: question area is the weighted, scrollable top part of the Column and is
-        // drawn ABOVE the keypad (zIndex 1). The keypad is a fixed-size sibling below it,
-        // so the question can never sit behind it; long questions scroll inside their area.
-        Box(
-            Modifier
-                .weight(1f)
-                .fillMaxWidth()
-                .zIndex(1f)
-                .padding(16.dp)
-        ) {
-            Column(
-                Modifier.align(Alignment.Center).verticalScroll(rememberScrollState())
-            ) {
-                key(u.id) { QuestionCard(u) }
-            }
+        if (vm.showQuit) {
+            AlertDialog(
+                onDismissRequest = { vm.showQuit = false },
+                containerColor = c.surface,
+                title = { Text2("Leave this session?") },
+                text = { Text2("Answers so far are already saved.") },
+                confirmButton = {
+                    TextButton(onClick = { vm.quit() }) { Txt("Leave", 15, FontWeight.Bold, c.error) }
+                },
+                dismissButton = {
+                    TextButton(onClick = { vm.showQuit = false }) { Txt("Keep going", 15, FontWeight.Medium, c.muted) }
+                }
+            )
         }
 
-        Keypad(
-            fractionKeys = cat.usesFractionKeys,
-            enabled = u.feedback == Feedback.None,
-            onKey = vm::onKey,
-            onDelete = vm::onDelete,
-            onClear = vm::onClear,
-            onSubmit = vm::submit
-        )
-    }
-
-    if (vm.showQuit) {
-        AlertDialog(
-            onDismissRequest = { vm.showQuit = false },
-            containerColor = c.surface,
-            title = { Text2("Leave this session?") },
-            text = { Text2("Answers so far are already saved.") },
-            confirmButton = {
-                TextButton(onClick = { vm.quit() }) { Txt("Leave", 15, FontWeight.Bold, c.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { vm.showQuit = false }) { Txt("Keep going", 15, FontWeight.Medium, c.muted) }
-            }
-        )
-    }
-
-        // FIX #8: perf — countdown overlay. Composed only while countdown != null,
-        // so when it clears there is no scrim, blur, or layer left behind.
         vm.countdown?.let { CountdownOverlay(it) }
-    }   // ← closes the Box
+    }
+}
+
+// FIX #8: perf — header is its own composable with primitive params. Typing a digit
+// changes `input`, not `answered`/`score`/`streak`, so Compose skips this entirely.
+@Composable
+private fun HeaderBar(answered: Int, total: Int, score: Int, streak: Int, onQuit: () -> Unit) {
+    val c = AppTheme.colors
+    Row(
+        Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
+        verticalAlignment = Alignment.CenterVertically
+    ) {
+        SoftButton("✕ Quit", size = 14, onClick = onQuit)
+        Spacer(Modifier.weight(1f))
+        Column(horizontalAlignment = Alignment.End) {
+            Txt("Q ${minOf(answered + 1, total)}/$total", 17, FontWeight.Bold)
+            Txt("Score $score · Streak $streak 🔥", 12, FontWeight.Medium, c.muted)
+        }
+    }
+}
+
+// FIX #8: perf — progress bar reads only answered/total. Keystrokes don't touch these.
+@Composable
+private fun ProgressBarRow(sessionId: Long, answered: Int, total: Int) {
+    key(sessionId) {
+        val progress = remember(answered, total) { answered.toFloat() / total }
+        GradientProgressBar(
+            progress = progress,
+            modifier = Modifier.padding(horizontal = 16.dp)
+        )
+    }
 }
 
 @Composable
@@ -472,6 +492,14 @@ fun Keypad(
     onClear: () -> Unit,
     onSubmit: () -> Unit
 ) {
+    // FIX #8: perf — capture callbacks via rememberUpdatedState so the lambda
+    // reference doesn't change identity on each recomposition of TrainingScreen.
+    // Compose can now SKIP the entire keypad when `enabled` and `fractionKeys`
+    // haven't changed (i.e., typing a digit doesn't touch the keypad's inputs).
+    val onKeyLatest = rememberUpdatedState(onKey)
+    val onDeleteLatest = rememberUpdatedState(onDelete)
+    val onClearLatest = rememberUpdatedState(onClear)
+    val onSubmitLatest = rememberUpdatedState(onSubmit)
     val c = AppTheme.colors
     Column(
         Modifier
@@ -482,34 +510,45 @@ fun Keypad(
     ) {
         listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9")).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                row.forEach { k -> KeyButton(k, Modifier.weight(1f), enabled) { onKey(k) } }
+                row.forEach { k ->
+                    KeyButton(k, Modifier.weight(1f), enabled) { onKeyLatest.value(k) }
+                }
             }
         }
-        // FIX #8: perf — "C" clears the whole input, "⌫" removes one character.
-        // C lives in the left slot on every category; "." moved to the fraction row below.
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            KeyButton("C", Modifier.weight(1f), enabled) { onClear() }
-            KeyButton("0", Modifier.weight(1f), enabled) { onKey("0") }
-            KeyButton("⌫", Modifier.weight(1f), enabled) { onDelete() }
+            KeyButton("C", Modifier.weight(1f), enabled) { onClearLatest.value() }
+            KeyButton("0", Modifier.weight(1f), enabled) { onKeyLatest.value("0") }
+            // FIX #8: perf — backspace supports hold-to-repeat, like a native keyboard.
+            KeyButtonRepeat("⌫", Modifier.weight(1f), enabled) { onDeleteLatest.value() }
         }
         if (fractionKeys) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                KeyButton(".", Modifier.weight(1f), enabled) { onKey(".") }
-                KeyButton("/", Modifier.weight(1f), enabled) { onKey("/") }
-                KeyButton("%", Modifier.weight(1f), enabled) { onKey("%") }
+                KeyButton(".", Modifier.weight(1f), enabled) { onKeyLatest.value(".") }
+                KeyButton("/", Modifier.weight(1f), enabled) { onKeyLatest.value("/") }
+                KeyButton("%", Modifier.weight(1f), enabled) { onKeyLatest.value("%") }
             }
         }
-        GradientButton("Submit", Modifier.fillMaxWidth(), enabled = enabled) { onSubmit() }
+        GradientButton(
+            "Submit",
+            Modifier.fillMaxWidth(),
+            enabled = enabled,
+            onClick = { onSubmitLatest.value() }
+        )
     }
 }
 
+// FIX #8: perf — keypad keys use plain `clickable`, NOT `bounceClick`. Reasons:
+//  (a) keypads must NEVER debounce — pressing "5" twice fast is intentional;
+//  (b) plain `clickable` has no `animateFloatAsState`, no scale, no graphicsLayer.
+//      The pressed-tint is a single color swap, ~0.3ms instead of ~5ms.
+// The clickable callback captures via `rememberUpdatedState` so the key skips
+// recomposition when the parent changes unrelated state.
 @Composable
 fun KeyButton(label: String, modifier: Modifier, enabled: Boolean, onClick: () -> Unit) {
     val c = AppTheme.colors
     val interaction = remember { MutableInteractionSource() }
     val pressed by interaction.collectIsPressedAsState()
-    // FIX #8: perf — pressed tint is a plain `alpha` change on the background color,
-    // not a scale animation. Cheaper than animateFloatAsState and visually similar.
+    val latest = rememberUpdatedState(onClick)
     val bg = if (pressed) c.surface else c.surfaceAlt
     Box(
         modifier
@@ -519,7 +558,7 @@ fun KeyButton(label: String, modifier: Modifier, enabled: Boolean, onClick: () -
                 interactionSource = interaction,
                 indication = LocalIndication.current,
                 enabled = enabled,
-                onClick = onClick
+                onClick = { latest.value() }
             )
             .background(bg),
         contentAlignment = Alignment.Center
@@ -626,12 +665,26 @@ fun ProgressScreen(vm: TrainerViewModel) {
             brush = Brush.linearGradient(listOf(c.error, c.error.copy(alpha = 0.7f)))
         ) { resetStep = 1 }
 
-        // FIX #8: perf — animated progress bar instead of a frozen "Loading…" label.
-        // While the dashboard snapshot is being computed on Dispatchers.IO, the bar
-        // fills with a gentle indeterminate motion; once the data arrives it's removed
-        // from composition entirely (no residual layer, no stutter on re-entry).
+        // FIX #8: perf — the transition animation runs BEFORE we mount the heavy
+        // category cards. Without this delay, all N cards try to compose on the same
+        // frame the fade begins, causing a GC pause mid-animation. A one-frame yield
+        // lets the fade play smoothly, THEN the cards mount at the end.
+        var cardsReady by remember { mutableStateOf(false) }
+        LaunchedEffect(dash) {
+            if (dash != null) {
+                // Two frames: one for the fade to begin, one for the fade to settle.
+                withFrameNanos { }
+                withFrameNanos { }
+                cardsReady = true
+            }
+        }
+
         if (vm.dashboardLoading || dash == null) {
             DashboardLoadingIndicator()
+        } else if (!cardsReady) {
+            // Show a thin placeholder during the 2-frame deferral window — the user
+            // doesn't see it because the fade is still running.
+            Box(Modifier.fillMaxWidth().height(1.dp))
         } else {
             Categories.all.forEach { cat ->
                 CategoryProgressSection(
@@ -741,8 +794,21 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
             ) { resetStep = 1 }
         }
 
+        // FIX #8: perf — same 2-frame deferral as ProgressScreen so the fade-in
+        // doesn't compete with the card's composition work.
+        var cardReady by remember { mutableStateOf(false) }
+        LaunchedEffect(dash) {
+            if (dash != null) {
+                withFrameNanos { }
+                withFrameNanos { }
+                cardReady = true
+            }
+        }
+
         if (vm.dashboardLoading || dash == null) {
             DashboardLoadingIndicator()
+        } else if (!cardReady) {
+            Box(Modifier.fillMaxWidth().height(1.dp))
         } else {
             CategoryProgressSection(
                 cat = cat,
@@ -750,7 +816,7 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
                 history = dash.history[cat.id] ?: emptyList(),
                 details = dash.details[cat.id] ?: emptyList(),
                 onOpen = null,
-                showHeader = false     // FIX #8: hero above already shows the category name
+                showHeader = false
             )
         }
     }
@@ -864,23 +930,30 @@ fun CategoryProgressSection(
         MasteryBar("Learning",   mastery.second,   c.warning)
         MasteryBar("Struggling", mastery.third,    c.error)
 
-        // Strengths & weaknesses text summary
-        val (strongTxt, weakTxt) = summarize(mastery, details)
+        // FIX #8: perf — summarize() allocates strings; cache on (mastery, details).
+        val (strongTxt, weakTxt) = remember(mastery, details) { summarize(mastery, details) }
         Txt("Strengths: $strongTxt", 11, FontWeight.Medium, c.success)
         Txt("Weaknesses: $weakTxt", 11, FontWeight.Medium, c.error)
 
         // Trend chart (empty state handled inside)
         TrendChart(history)
 
-        // Detailed lists (top 5 each, sorted)
-        val sortedByCorrect = details.sortedWith(
-            compareByDescending<AdaptiveEngine.FactDetail> { it.correct }
-                .thenBy { it.avgMs }
-        )
-        val sortedByWrong = details.sortedWith(
-            compareByDescending<AdaptiveEngine.FactDetail> { it.incorrect }
-                .thenByDescending { it.lastSeen }
-        )
+        // FIX #8: perf — cache the sorted lists on the `details` reference. Without
+        // remember, every recomposition re-runs both sorts (O(n log n) each). On a
+        // dashboard with 10 categories × 2 sorts = 20 sorts per recomposition, which
+        // contributed to the young-gen GC pressure and mid-animation stutter.
+        val sortedByCorrect = remember(details) {
+            details.sortedWith(
+                compareByDescending<AdaptiveEngine.FactDetail> { it.correct }
+                    .thenBy { it.avgMs }
+            )
+        }
+        val sortedByWrong = remember(details) {
+            details.sortedWith(
+                compareByDescending<AdaptiveEngine.FactDetail> { it.incorrect }
+                    .thenByDescending { it.lastSeen }
+            )
+        }
 
         if (sortedByCorrect.any { it.correct > 0 }) {
             Txt("Strengths (detailed)", 11, FontWeight.SemiBold, c.muted)

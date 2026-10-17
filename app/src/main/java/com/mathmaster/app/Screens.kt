@@ -247,12 +247,17 @@ fun RangeScreen(vm: TrainerViewModel) {
         verticalArrangement = Arrangement.spacedBy(10.dp)
     ) {
         // ---- Compact gradient header ----
+        // FIX #8 — the whole header is now a tappable back target. Tapping anywhere
+        // on the gradient (symbol, name, blurb, or the chevron itself) returns to the
+        // Menu. This matches ProgressHeader's behavior on the Progress Dashboard,
+        // giving a consistent back affordance across screens.
         Row(
             Modifier
                 .fillMaxWidth()
                 .shadow(6.dp, headerShape)
                 .clip(headerShape)
                 .background(Brush.linearGradient(listOf(cat.colorA, cat.colorB)))
+                .bounceClick(headerShape, 0.dp, onClick = { vm.toMenu() })
                 .padding(horizontal = 14.dp, vertical = 12.dp),
             verticalAlignment = Alignment.CenterVertically
         ) {
@@ -261,6 +266,13 @@ fun RangeScreen(vm: TrainerViewModel) {
             Column(Modifier.weight(1f)) {
                 Txt(cat.name, 18, FontWeight.ExtraBold, Color.White)
                 Txt(cat.blurb, 11, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
+            }
+            // Visual affordance only — the ripple and click are on the parent Row.
+            Box(
+                Modifier.size(44.dp),
+                contentAlignment = Alignment.Center
+            ) {
+                Txt("‹", 34, FontWeight.Bold, Color.White, align = TextAlign.Center)
             }
         }
 
@@ -716,6 +728,19 @@ fun ResultsScreen(vm: TrainerViewModel) {
         }
 
         GradientButton("Practice again", Modifier.fillMaxWidth()) { vm.startSession() }
+        // FIX #8 — new secondary action: return to the range screen for this category.
+        // The `results.categoryId` is guaranteed non-null here because this branch only
+        // runs after `if (r == null) return` at the top of ResultsScreen — but we still
+        // resolve the Category via byId and guard against the (impossible) not-found
+        // case by falling back to the menu if the category was deleted mid-session.
+        val currentCategory = Categories.all.firstOrNull { it.id == r.categoryId }
+        if (currentCategory != null) {
+            SoftButton(
+                "Back to Category",
+                Modifier.fillMaxWidth(),
+                onClick = { vm.openCategory(currentCategory) }
+            )
+        }
         SoftButton("Back to menu", Modifier.fillMaxWidth()) { vm.toMenu() }
     }
 }

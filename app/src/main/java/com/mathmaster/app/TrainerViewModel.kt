@@ -151,13 +151,53 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
 
     // FIX #8: perf — dashboard + detail navigation. Data loads asynchronously; the
     // screens render an empty state until `dashboard` is populated.
-    fun openProgress() = navigateTo(Screen.Progress) {
-        loadDashboard()
+    fun openProgress() {
+        // FIX #8: perf — compute the dashboard snapshot BEFORE engaging the nav lock
+        // and starting the slide. Otherwise the slide animates while Categories.all
+        // is being mapped into 10 fresh dashboard sections, causing the visible lag.
+        // By loading first, the destination screen mounts with data already present —
+        // no `dashboardLoading` branch, no placeholder flash, no card composition
+        // racing the slide.
+        if (dashboard == null) {
+            dashboardLoading = true
+            viewModelScope.launch {
+                val data = withContext(Dispatchers.IO) {
+                    DashboardData(
+                        Categories.all.associate { it.id to engine.mastery(it.id) },
+                        Categories.all.associate { it.id to engine.history(it.id) },
+                        Categories.all.associate { it.id to engine.details(it.id) }
+                    )
+                }
+                dashboard = data
+                dashboardLoading = false
+                // Now that data is ready, engage the nav lock and slide.
+                navigateTo(Screen.Progress)
+            }
+        } else {
+            navigateTo(Screen.Progress)
+        }
     }
 
-    fun openCategoryDetail(c: Category) = navigateTo(Screen.CategoryDetail) {
+    fun openCategoryDetail(c: Category) {
+        // FIX #8: perf — same pattern as openProgress. Load first, then navigate.
         selected = c
-        loadDashboard()
+        if (dashboard == null) {
+            dashboardLoading = true
+            viewModelScope.launch {
+                val data = withContext(Dispatchers.IO) {
+                    DashboardData(
+                        Categories.all.associate { it.id to engine.mastery(it.id) },
+                        Categories.all.associate { it.id to engine.history(it.id) },
+                        Categories.all.associate { it.id to engine.details(it.id) }
+                    )
+                }
+                dashboard = data
+                dashboardLoading = false
+                navigateTo(Screen.CategoryDetail)
+            }
+        } else {
+            navigateTo(Screen.CategoryDetail)
+        }
     }
 
     // ---------- navigation ----------

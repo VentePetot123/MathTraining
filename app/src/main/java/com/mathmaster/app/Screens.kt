@@ -839,16 +839,6 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
             ) { resetStep = 1 }
         }
 
-        // FIX #8: perf — same 2-frame deferral as ProgressScreen so the fade-in
-        // doesn't compete with the card's composition work.
-        LaunchedEffect(dash) {
-            if (dash != null) {
-                withFrameNanos { }
-                withFrameNanos { }
-                cardReady = true
-            }
-        }
-
         if (dash == null) {
             DashboardLoadingIndicator()
         } else {

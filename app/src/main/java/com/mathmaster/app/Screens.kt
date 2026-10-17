@@ -522,13 +522,6 @@ fun QuestionCard(u: UiSession) {
 
         Txt(fact.prompt, promptSize, FontWeight.ExtraBold, c.onBackground, Modifier.fillMaxWidth(), TextAlign.Center)
 
-        // FIX #8 — show the rounding rule (if any) while the user is typing.
-        // This is different from `u.hint` (which is only used for format errors
-        // like "check the answer format"). This is a persistent per-fact note.
-        if (fact.note != null) {
-            Txt(fact.note, 13, FontWeight.SemiBold, c.accentA, Modifier.fillMaxWidth(), TextAlign.Center)
-        }
-
         val borderColor = when (u.feedback) {
             Feedback.Correct -> c.success
             Feedback.Wrong -> c.error

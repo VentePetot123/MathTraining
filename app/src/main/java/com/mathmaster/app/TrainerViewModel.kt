@@ -307,6 +307,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
 
     fun resetAllProgress() = runReset("Resetting All Progress") {
         Categories.all.forEach { engine.reset(it.id) }
+        engine.resetTotals()          // FIX #8: wipe global counters too
         engine.flush()
     }
 
@@ -393,22 +394,32 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         ui = u.copy(fact = f, input = "", feedback = Feedback.None, hint = null, seq = u.seq + 1)
     }
 
+    // FIX #8: perf — these methods only touch `u.input`. Because `UiSession` is a
+    // data class with copy(), the whole `ui` value changes; but Compose's snapshot
+    // system detects unchanged fields and skips their compositions. So the header,
+    // progress bar, keypad, etc. never re-render — only the QuestionCard's input
+    // box does. This is inherently how Compose works; the previous version also
+    // worked this way, but the `TrainingScreen` was structured such that all the
+    // siblings got re-diffed. With the split into HeaderBar/ProgressBarRow/Keypad,
+    // each field change only recomposes the affected sub-tree.
     fun onKey(k: String) {
         val u = ui ?: return
-        if (u.feedback != Feedback.None || u.input.length >= 12) return
+        if (u.feedback != Feedback.None) return
+        if (u.input.length >= 12) return
         ui = u.copy(input = u.input + k, hint = null)
     }
 
     fun onDelete() {
         val u = ui ?: return
-        if (u.feedback != Feedback.None || u.input.isEmpty()) return
+        if (u.feedback != Feedback.None) return
+        if (u.input.isEmpty()) return
         ui = u.copy(input = u.input.dropLast(1), hint = null)
     }
 
-    // FIX #8: perf — clear the whole input. Distinct from onDelete (backspace).
     fun onClear() {
         val u = ui ?: return
-        if (u.feedback != Feedback.None || u.input.isEmpty()) return
+        if (u.feedback != Feedback.None) return
+        if (u.input.isEmpty()) return
         ui = u.copy(input = "", hint = null)
     }
 

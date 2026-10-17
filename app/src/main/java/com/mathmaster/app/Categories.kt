@@ -13,7 +13,11 @@ data class Fact(
     val answer: String,    // canonical answer
     val solution: String,  // full worked fact, e.g. "6 × 7 = 42"
     val kind: Kind,
-    val note: String? = null   // optional hint shown under the answer box
+    val note: String? = null,  // optional hint shown under the answer box
+    // FIX #8 — true only for DEC facts whose decimal expansion is infinite.
+    // Grading uses this to allow ±0.0001 tolerance for infinite decimals while
+    // requiring exact match for finite decimals (0.25 not 0.2500).
+    val infinite: Boolean = false
 )
 
 class Category(
@@ -150,6 +154,16 @@ private fun genFactorials(lo: Int, hi: Int): List<Fact> {
     return out
 }
 
+// FIX #8 — format a finite decimal using the shortest exact representation.
+// 0.25 → "0.25"; 0.5 → "0.5"; 0.0 → "0". No trailing zeros, no forced rounding.
+private fun trimExact(v: Double): String {
+    // up to 15 significant digits; java's Double.toString gives the shortest
+    // decimal that round-trips back to the same double.
+    val s = v.toString()
+    // Strip a trailing ".0" so integers print as integers (e.g. 1.0 → "1").
+    return if (s.endsWith(".0")) s.dropLast(2) else s
+}
+
 // True when n/d (already reduced) is a repeating decimal, i.e. d has a prime
 // factor other than 2 or 5. Those are the answers that can't be typed exactly.
 private fun repeats(d: Int): Boolean {
@@ -167,13 +181,36 @@ private fun genFdp(lo0: Int, hi0: Int): List<Fact> {
         if (gcd(n, d) != 1) continue
         val ratio = n.toDouble() / d
         val frac = "$n/$d"
+
+        // FIX #8 — a decimal is "infinite" if the denominator has a prime factor
+        // other than 2 or 5. That's when the decimal expansion repeats forever and
+        // must be rounded (to 4 places here) for the user to be able to type it.
+        // Finite decimals like 1/4 = 0.25 must render as the exact value, not 0.2500.
+        val isInfinite = repeats(d)
+
+        // Percent always rounds to 2 decimals (display convention) — kept as-is.
         val pct = fmt(ratio * 100, 2) + "%"
-        val dec = fmt(ratio, 4)
-        val note = if (repeats(d)) "Repeating? Round to 2 decimals" else null
-        map["$frac → %"] = Fact("$frac → %", "$frac = ? %", pct, "$frac = $pct", Kind.PCT, note)
-        map["$frac → dec"] = Fact("$frac → dec", "$frac = ? (decimal)", dec, "$frac = $dec", Kind.DEC, note)
+
+        // Decimal: use 4 places only if infinite; otherwise use the exact value with
+        // trailing zeros trimmed (e.g. 0.25, not 0.2500; 0.5, not 0.50).
+        val dec = if (isInfinite) fmt(ratio, 4) else trimExact(ratio)
+
+        val decNote = if (isInfinite) "Round to 4 decimal places" else null
+        val pctNote = if (isInfinite) "Round to 2 decimal places" else null
+
+        map["$frac → %"] = Fact(
+            "$frac → %", "$frac = ? %", pct, "$frac = $pct",
+            Kind.PCT, pctNote
+        )
+        map["$frac → dec"] = Fact(
+            "$frac → dec", "$frac = ? (decimal)", dec, "$frac = $dec",
+            Kind.DEC, decNote, isInfinite
+        )
         if (!map.containsKey("$pct → frac")) {
-            map["$pct → frac"] = Fact("$pct → frac", "$pct = ? (fraction)", frac, "$pct = $frac", Kind.FRAC)
+            map["$pct → frac"] = Fact(
+                "$pct → frac", "$pct = ? (fraction)", frac, "$pct = $frac",
+                Kind.FRAC
+            )
         }
     }
     return map.values.toList()
@@ -215,7 +252,21 @@ object Grading {
             Kind.INT -> t.toLongOrNull()?.let { it == f.answer.toLong() }
             Kind.PCT -> t.trimEnd('%').toDoubleOrNull()
                 ?.let { abs(it - f.answer.trimEnd('%').toDouble()) <= 0.05 }
-            Kind.DEC -> t.toDoubleOrNull()?.let { abs(it - f.answer.toDouble()) <= 0.005 }
+            Kind.DEC -> t.toDoubleOrNull()?.let { user ->
+                val expected = f.answer.toDouble()
+                if (f.infinite) {
+                    // FIX #8 — infinite decimal: accept anything within 4 decimal places
+                    // of the correct rounded value. Tolerance of 0.0001 covers both the
+                    // user typing "0.3333" (exactly) and "0.33333" (extra digit rounded).
+                    abs(user - expected) <= 0.0001
+                } else {
+                    // FIX #8 — finite decimal: require exact match. If canonical is
+                    // "0.25", user must type 0.25 (not 0.2500 — but the parser trims
+                    // trailing zeros implicitly because 0.2500.toDouble() == 0.25).
+                    // Tiny tolerance to handle floating point representation.
+                    abs(user - expected) <= 1e-9
+                }
+            }
             Kind.FRAC -> {
                 val p = t.split("/")
                 val n = if (p.size == 2) p[0].toLongOrNull() else null

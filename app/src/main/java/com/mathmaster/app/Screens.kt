@@ -153,6 +153,10 @@ fun MenuScreen(vm: TrainerViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .background(c.background),
+        // FIX #8 — use the VM-held scroll state so the scroll position survives
+        // navigating away and returning. Picking 3ⁿ at the bottom, backing out, and
+        // coming back keeps you at the bottom — no re-scroll needed.
+        state = vm.menuScrollState,
         contentPadding = PaddingValues(16.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
@@ -275,7 +279,16 @@ fun RangeScreen(vm: TrainerViewModel) {
         // ---- Questions per session card ----
         CompactCard {
             Txt("Questions per session", 15, FontWeight.Bold)
-            Stepper("Questions", vm.questionCount, 5) { vm.setCount(it) }
+            // FIX #8 — allow 3-digit input up to 200 for question count, while the
+            // From/To range steppers keep the default 2-digit / 99 cap.
+            Stepper(
+                label = "Questions",
+                value = vm.questionCount,
+                step = 5,
+                onChange = { vm.setCount(it) },
+                maxDigits = 3,
+                maxValue = 200
+            )
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(6.dp)) {
                 listOf(10, 20, 30, 50).forEach { n ->
                     SoftButton("$n", Modifier.weight(1f), size = 12) { vm.setCount(n) }
@@ -749,6 +762,9 @@ fun ProgressScreen(vm: TrainerViewModel) {
                 .fillMaxSize()
                 .background(c.background)
                 .then(if (vm.resetting != null) Modifier.blur(16.dp) else Modifier),
+            // FIX #8 — preserve scroll across navigation. If you scroll to the bottom
+            // of the dashboard, tap a category, and come back, you stay where you were.
+            state = vm.progressScrollState,
             contentPadding = PaddingValues(20.dp),
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {

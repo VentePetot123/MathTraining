@@ -211,6 +211,20 @@ class Store(context: Context) {
             .apply()
         totalsDirty = false
     }
+
+    // FIX #8: perf — wipe the in-memory counter cache AND the persisted values.
+    // Called by "Reset All Progress". The cache becomes an all-zeros triple so
+    // subsequent reads see the reset immediately, without waiting for a process
+    // restart or a new `loadTotals()` from disk.
+    fun resetTotals() {
+        cachedTotals = Triple(0, 0, 0)
+        totalsDirty = true
+        prefs.edit()
+            .putInt("total_answers", 0)
+            .putInt("sessions", 0)
+            .putInt("best_streak", 0)
+            .apply()
+    }
 }
 
 /**
@@ -276,6 +290,13 @@ class AdaptiveEngine(private val store: Store) {
         histories[cat] = mutableListOf()
         dirty.remove(cat)
         store.clearCategory(cat)
+    }
+
+    // FIX #8: perf — wipe the cached totals too. Without this, the header keeps
+    // showing the pre-reset counters because Store caches them in memory and
+    // never re-reads from prefs until the process restarts.
+    fun resetTotals() {
+        store.resetTotals()
     }
 
     // FIX #8: perf — snapshot per-session aggregate for the dashboard trend chart.

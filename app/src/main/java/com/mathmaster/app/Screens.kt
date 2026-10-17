@@ -1046,9 +1046,6 @@ fun CategoryProgressSection(
         Modifier.bounceClick(RoundedCornerShape(20.dp), 4.dp, onClick = onOpen)
     else Modifier
 
-    // FIX #8: perf — compact card. Smaller paddings, tighter spacing, and smaller
-    // typography everywhere so the whole section fits the reference look and the
-    // dashboard stays short. Behaviour is identical; only the visual scale changed.
     CompactCard(clickMod) {
         // FIX #8: perf — header row only when the caller wants it. The category detail
         // screen already shows symbol + name in the gradient hero, so the duplicate is
@@ -1114,14 +1111,6 @@ fun CategoryProgressSection(
                     Txt("${d.key}  ✗${d.incorrect}  avg ${(d.avgMs / 1000.0).format1()}s",
                         11, FontWeight.Normal, c.onBackground)
                 }
-            }
-        }
-
-        if (sortedByWrong.isNotEmpty()) {
-            Txt("Weaknesses (detailed)", 11, FontWeight.SemiBold, c.muted)
-            sortedByWrong.take(5).forEach { d ->
-                Txt("${d.key}  ✗${d.incorrect}  avg ${(d.avgMs / 1000.0).format1()}s",
-                    11, FontWeight.Normal, c.onBackground)
             }
         }
     }

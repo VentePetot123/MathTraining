@@ -277,6 +277,30 @@ fun RangeScreen(vm: TrainerViewModel) {
             }
         }
 
+        // Rounding rule — shown first so it can't be missed (Fractions/Decimals/% only)
+        if (cat.id == "fdp") {
+            Row(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(14.dp))
+                    .background(c.accentA.copy(alpha = 0.14f))
+                    .border(1.dp, c.accentA.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
+                    .padding(horizontal = 12.dp, vertical = 10.dp),
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(10.dp)
+            ) {
+                Txt("ⓘ", 20, FontWeight.Bold, c.accentA)
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                    Txt("Rounding rule", 13, FontWeight.Bold, c.onBackground)
+                    Txt(
+                        "Infinite decimals (like 1/3): type 4 decimal places, e.g. 0.3333. " +
+                            "Percentages: 2 decimal places, e.g. 33.33%.",
+                        12, FontWeight.Medium, c.muted
+                    )
+                }
+            }
+        }
+
         // ---- Number range card ----
         CompactCard {
             Txt(if (cat.usesFractionKeys) "Denominator range" else "Number range", 15, FontWeight.Bold)
@@ -311,20 +335,6 @@ fun RangeScreen(vm: TrainerViewModel) {
                     SoftButton("$n", Modifier.weight(1f), size = 12) { vm.setCount(n) }
                 }
             }
-        }
-
-        // FIX #8 — FDP-only hint below "Questions per session". Explains the
-        // infinite-decimal rounding rule so the user knows what to type when they
-        // see a fraction like 1/3 that doesn't terminate.
-        if (cat.id == "fdp") {
-            Txt(
-                "4 Decimal Places Only for Infinite Decimals",
-                11,
-                FontWeight.Medium,
-                c.muted,
-                Modifier.fillMaxWidth(),
-                TextAlign.Center
-            )
         }
 
         // ---- Compact stat line ----
@@ -509,18 +519,6 @@ fun QuestionCard(u: UiSession) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // FIX #8 — show a small hint above the prompt for decimal questions
-        if (fact.kind == Kind.DEC) {
-            Txt(
-                "2 Decimal Places Only",
-                12,
-                FontWeight.Medium,
-                c.muted,
-                Modifier.fillMaxWidth(),
-                TextAlign.Center
-            )
-            Spacer(Modifier.height(4.dp))
-        }
 
         Txt(fact.prompt, promptSize, FontWeight.ExtraBold, c.onBackground, Modifier.fillMaxWidth(), TextAlign.Center)
 
@@ -528,7 +526,7 @@ fun QuestionCard(u: UiSession) {
         // This is different from `u.hint` (which is only used for format errors
         // like "check the answer format"). This is a persistent per-fact note.
         if (fact.note != null) {
-            Txt(fact.note, 11, FontWeight.Medium, c.muted, Modifier.fillMaxWidth(), TextAlign.Center)
+            Txt(fact.note, 13, FontWeight.SemiBold, c.accentA, Modifier.fillMaxWidth(), TextAlign.Center)
         }
 
         val borderColor = when (u.feedback) {

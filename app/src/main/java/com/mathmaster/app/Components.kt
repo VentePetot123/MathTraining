@@ -326,7 +326,17 @@ fun FeedbackMark(correct: Boolean, seq: Int, modifier: Modifier = Modifier) {
 }
 
 @Composable
-fun Stepper(label: String, value: Int, step: Int, onChange: (Int) -> Unit) {
+fun Stepper(
+    label: String,
+    value: Int,
+    step: Int,
+    onChange: (Int) -> Unit,
+    // FIX #8 — per-field caps. Range defaults to 2 digits / 99; Question count
+    // overrides to 3 digits / 200. The number-entry dialog and the +/− buttons
+    // both respect these limits.
+    maxDigits: Int = 2,
+    maxValue: Int = 99
+) {
     val c = AppTheme.colors
     // FIX #8: perf — the middle value is now tap-to-edit. Tapping it opens a compact
     // numeric keypad dialog; confirming clamps the value to 1..99 before calling
@@ -335,7 +345,7 @@ fun Stepper(label: String, value: Int, step: Int, onChange: (Int) -> Unit) {
 
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Txt(label, 13, FontWeight.Medium, c.muted, Modifier.weight(1f))
-        RoundButtonSmall("−") { onChange(value - step) }
+        RoundButtonSmall("−") { onChange((value - step).coerceIn(1, maxValue)) }
         // Tap target for the value
         Box(
             Modifier
@@ -345,16 +355,18 @@ fun Stepper(label: String, value: Int, step: Int, onChange: (Int) -> Unit) {
         ) {
             Txt(value.toString(), 18, FontWeight.Bold, c.onBackground, align = TextAlign.Center)
         }
-        RoundButtonSmall("+") { onChange(value + step) }
+        RoundButtonSmall("+") { onChange((value + step).coerceIn(1, maxValue)) }
     }
 
     if (editing) {
         NumberInputDialog(
             initial = value,
+            maxDigits = maxDigits,
+            maxValue = maxValue,
             onDismiss = { editing = false },
             onConfirm = { picked ->
                 editing = false
-                onChange(picked)     // VM applies its own coerceIn on top of this
+                onChange(picked.coerceIn(1, maxValue))     // clamp with the field's own limit
             }
         )
     }
@@ -514,7 +526,12 @@ fun RoundButtonSmall(text: String, onClick: () -> Unit) {
 fun NumberInputDialog(
     initial: Int,
     onDismiss: () -> Unit,
-    onConfirm: (Int) -> Unit
+    onConfirm: (Int) -> Unit,
+    // FIX #8 — per-field caps. Range = 2 digits / 99. Questions = 3 digits / 200.
+    // Both the max-digit rejection ("Max Digits" toast) and the final value
+    // validation ("Set" enabled state) respect these.
+    maxDigits: Int = 2,
+    maxValue: Int = 99
 ) {
     val c = AppTheme.colors
     // FIX #8: perf — track input as TextFieldValue so we can pin the cursor to the
@@ -576,7 +593,8 @@ fun NumberInputDialog(
                     onValueChange = { newValue ->
                         val digitsOnly = newValue.text.filter { it.isDigit() }
                         when {
-                            digitsOnly.length <= 2 -> {
+                            // FIX #8 — cap by the field's own maxDigits, not hardcoded 2.
+                            digitsOnly.length <= maxDigits -> {
                                 // FIX #8: perf — distinguish "text changed" (typing,
                                 // backspace, paste) from "selection changed" (user
                                 // tapped inside the field). If the text changed, force
@@ -605,7 +623,7 @@ fun NumberInputDialog(
                     keyboardActions = KeyboardActions(
                         onDone = {
                             val parsed = textFieldValue.text.toIntOrNull()
-                            if (parsed != null && parsed in 1..99) onConfirm(parsed)
+                            if (parsed != null && parsed in 1..maxValue) onConfirm(parsed)
                         }
                     ),
                     cursorBrush = SolidColor(c.accentA),
@@ -624,7 +642,8 @@ fun NumberInputDialog(
         },
         confirmButton = {
             val parsed = textFieldValue.text.toIntOrNull()
-            val valid = parsed != null && parsed in 1..99
+            // FIX #8 — validate against the field's own maxValue, not a hardcoded 99.
+            val valid = parsed != null && parsed in 1..maxValue
             TextButton(
                 onClick = { if (valid) onConfirm(parsed!!) },
                 enabled = valid

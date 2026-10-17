@@ -50,6 +50,10 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         // FIX #8: perf — minimum time the reset overlay stays visible so the user
         // always perceives it even when the underlying work finishes in <100ms.
         private const val MIN_RESET_OVERLAY_MS = 650L
+        // FIX #8: perf — upper bound on how long the nav lock stays engaged if the
+        // destination screen never calls `arrivedAt(gen)`. 1500ms is well above any
+        // transition (240ms) plus settle time, so it only fires as a failsafe.
+        private const val NAV_TIMEOUT_MS = 1500L
     }
 
     private val store = Store(app)
@@ -165,9 +169,12 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     //                                  navGeneration (prevents stale releases).
     //   • watchdog                   — if arrivedAt never fires in NAV_TIMEOUT_MS,
     //                                  the lock is force-cleared so the app can't freeze.
-    private fun navigateTo(next: Screen, prep: () -> Unit = {}) {
-        if (isNavigating) return       // reject taps during in-flight transition
-        if (screen == next) return     // no-op when already there (belt + suspenders)
+    private fun navigateTo(next: Screen, prep: () -> Unit = {}): Boolean {
+        // FIX #8: perf — return Boolean so callers know whether the nav actually
+        // engaged. If we bail because the lock is up or we're already there, callers
+        // must not proceed to mutate state (e.g., startSession's countdown).
+        if (isNavigating) return false
+        if (screen == next) return true       // already there — treat as success
         isNavigating = true
         navGeneration++
         prep()
@@ -175,11 +182,9 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         navWatchdog?.cancel()
         navWatchdog = viewModelScope.launch {
             delay(NAV_TIMEOUT_MS)
-            // Force the lock off if nothing released it. Should never happen, but
-            // protects against rotation-into-transition or a caller that forgot
-            // to invoke `arrivedAt`.
             if (isNavigating) isNavigating = false
         }
+        return true
     }
 
     /** Called by the destination screen once it's composed and stable. */
@@ -212,12 +217,24 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun toMenu() = navigateTo(Screen.Menu) {
+    fun toMenu() {
+        // FIX #8: perf — cancel any in-flight countdown coroutine before navigating.
+        // Otherwise the `nextQuestion()` inside it fires after we've left Training,
+        // and nextQuestion's guard returns silently — but the user is now on Menu
+        // with a dangling runtime.
         advanceJob?.cancel()
         countdown = null
-        showQuit = false
-        engine.flush()
-        refreshMenu()
+
+        val navigated = navigateTo(Screen.Menu) {
+            showQuit = false
+            engine.flush()
+            refreshMenu()
+        }
+        // If nav bailed, still clear local state — the session is dead either way.
+        if (!navigated) {
+            runtime = null
+            ui = null
+        }
     }
 
     fun quit() = toMenu()
@@ -310,9 +327,12 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     }
 
     fun startSession() {
-        // FIX #8: perf — route through navigateTo so the nav lock engages. If the user
-        // double-taps "Start Practice", the second tap is rejected by the guard inside
-        // navigateTo (`if (isNavigating) return`).
+        // FIX #8: perf — check the lock BEFORE mutating any state. If a transition is
+        // in flight, we must not touch ui/runtime/countdown because we might bail
+        // inside navigateTo and leave dangling state behind.
+        if (isNavigating) return
+        if (screen != Screen.Range && screen != Screen.Results) return   // only from valid screens
+
         advanceJob?.cancel()
         val c = selected
         val facts = factsFor(c, rangeMin, rangeMax)
@@ -331,19 +351,29 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         results = null
         showQuit = false
 
-        // FIX #8: perf — nav goes through navigateTo (engages the lock) instead of
-        // assigning `screen` directly. This is the ONLY line that changes vs. the
-        // original — everything else is preserved.
-        navigateTo(Screen.Training)
+        // FIX #8: perf — if the nav call bails (lock engaged by a racing nav),
+        // roll back the session state so the user doesn't get stuck with dangling
+        // runtime/countdown state on the Range screen.
+        val navigated = navigateTo(Screen.Training)
+        if (!navigated) {
+            // Rollback: no session, no countdown, no runtime.
+            runtime = null
+            ui = null
+            countdown = null
+            return
+        }
 
-        // FIX #8: perf — hold the first question behind a short Ready/Set/Solve!
-        // countdown so the user has a beat before the answer section appears.
         countdown = "Ready"
         viewModelScope.launch {
-            delay(600); countdown = "Set"
-            delay(600); countdown = "Solve!"
+            delay(600)
+            if (screen != Screen.Training) { countdown = null; return@launch }
+            countdown = "Set"
+            delay(600)
+            if (screen != Screen.Training) { countdown = null; return@launch }
+            countdown = "Solve!"
             delay(500)
-            countdown = null          // clears the overlay — no residual scrim/layer
+            if (screen != Screen.Training) { countdown = null; return@launch }
+            countdown = null
             nextQuestion()
         }
     }
@@ -462,6 +492,11 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
             introduced = rt.introduced
         )
         refreshMenu()
-        navigateTo(Screen.Results)
+        // FIX #8: perf — if the nav bails (lock engaged), don't leave `results`
+        // dangling; the user is somewhere else and doesn't need a Results screen.
+        val navigated = navigateTo(Screen.Results)
+        if (!navigated) {
+            results = null
+        }
     }
 }

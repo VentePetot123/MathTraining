@@ -1007,35 +1007,39 @@ fun CategoryProgressSection(
         // Trend chart (empty state handled inside)
         TrendChart(history)
 
-        // FIX #8: perf — cache the sorted lists on the `details` reference. Without
-        // remember, every recomposition re-runs both sorts (O(n log n) each). On a
-        // dashboard with 10 categories × 2 sorts = 20 sorts per recomposition, which
-        // contributed to the young-gen GC pressure and mid-animation stutter.
+        // FIX #8 — a fact belongs to EXACTLY ONE list. Previously the filters were
+        // `correct > 0` and `incorrect > 0` independently, so a fact with one right
+        // and one wrong answer appeared in BOTH lists. Now we partition:
+        //   • strengths  = facts where correct > incorrect (net-positive)
+        //   • weaknesses = facts where incorrect >= correct (net-neutral or worse)
+        // Both sorts still cache on `details` so recomposition stays O(1).
         val sortedByCorrect = remember(details) {
-            details.sortedWith(
-                compareByDescending<AdaptiveEngine.FactDetail> { it.correct }
-                    .thenBy { it.avgMs }
-            )
+            details.filter { it.correct > it.incorrect }
+                .sortedWith(
+                    compareByDescending<AdaptiveEngine.FactDetail> { it.correct - it.incorrect }
+                        .thenBy { it.avgMs }
+                )
         }
         val sortedByWrong = remember(details) {
-            details.sortedWith(
-                compareByDescending<AdaptiveEngine.FactDetail> { it.incorrect }
-                    .thenByDescending { it.lastSeen }
-            )
+            details.filter { it.incorrect > 0 && it.incorrect >= it.correct }
+                .sortedWith(
+                    compareByDescending<AdaptiveEngine.FactDetail> { it.incorrect - it.correct }
+                        .thenByDescending { it.lastSeen }
+                )
         }
 
-        if (sortedByCorrect.any { it.correct > 0 }) {
+        if (sortedByCorrect.isNotEmpty()) {
             Txt("Strengths (detailed)", 11, FontWeight.SemiBold, c.muted)
-            sortedByCorrect.filter { it.correct > 0 }.take(5).forEach { d ->
+            sortedByCorrect.take(5).forEach { d ->
                 Txt("${d.key}  ✓${d.correct}  avg ${(d.avgMs / 1000.0).format1()}s",
                     11, FontWeight.Normal, c.onBackground)
             }
         }
 
-        if (sortedByWrong.any { it.incorrect > 0 }) {
+        if (sortedByWrong.isNotEmpty()) {
             Txt("Weaknesses (detailed)", 11, FontWeight.SemiBold, c.muted)
-            sortedByWrong.filter { it.incorrect > 0 }.take(5).forEach { d ->
-                Txt("${d.key}  ✗${d.incorrect}  last seen ${agoString(d.lastSeen)}",
+            sortedByWrong.take(5).forEach { d ->
+                Txt("${d.key}  ✗${d.incorrect}  avg ${(d.avgMs / 1000.0).format1()}s",
                     11, FontWeight.Normal, c.onBackground)
             }
         }
@@ -1065,17 +1069,6 @@ private fun MasteryBar(label: String, pct: Int, color: Color) {
 
 // Small helpers used only inside the dashboard section.
 private fun Double.format1(): String = String.format(java.util.Locale.US, "%.1f", this)
-
-private fun agoString(lastSeen: Long): String {
-    if (lastSeen <= 0L) return "—"
-    val mins = (System.currentTimeMillis() - lastSeen) / 60_000
-    return when {
-        mins < 1    -> "just now"
-        mins < 60   -> "${mins}m ago"
-        mins < 1440 -> "${mins / 60}h ago"
-        else        -> "${mins / 1440}d ago"
-    }
-}
 
 private fun summarize(
     mastery: Triple<Int, Int, Int>,

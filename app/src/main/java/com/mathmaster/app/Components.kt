@@ -527,46 +527,64 @@ fun NumberInputDialog(
         textContentColor = c.muted,
         title = { Txt("Enter value (1–99)", 16, FontWeight.Bold) },
         text = {
-            // FIX #8: perf — full-width BasicTextField + TextAlign.Center puts the
-            // digits dead-center AND places the blinking cursor after the last digit
-            // (the standard look for number-entry dialogs). Previously the field was
-            // content-width and centered by the Box — which centered the cursor
-            // *with* the digits, leaving the cursor between text and left edge.
-            BasicTextField(
-                value = buffer,
-                onValueChange = { new ->
-                    val digitsOnly = new.filter { it.isDigit() }
-                    when {
-                        digitsOnly.length <= 2 -> buffer = digitsOnly
-                        else -> maxDigitsTick++
-                    }
-                },
-                singleLine = true,
-                keyboardOptions = KeyboardOptions(
-                    keyboardType = KeyboardType.Number,
-                    imeAction = ImeAction.Done
-                ),
-                keyboardActions = KeyboardActions(
-                    onDone = {
-                        val parsed = buffer.toIntOrNull()
-                        if (parsed != null && parsed in 1..99) onConfirm(parsed)
-                    }
-                ),
-                cursorBrush = SolidColor(c.accentA),
-                textStyle = TextStyle(
-                    color = c.onBackground,
-                    fontSize = 28.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
-                ),
-                modifier = Modifier
+            // FIX #8: perf — split the visual into two layers:
+            //  1. A centered Text shows the digits (always dead-center).
+            //  2. A transparent BasicTextField sits on top for typing, with its text
+            //     color set to Transparent so only the cursor is visible. Its text is
+            //     right-aligned, which puts the blinking cursor at the far-right edge.
+            // The Box wraps both so the ripple / focus rectangle look like one field.
+            Box(
+                Modifier
                     .fillMaxWidth()
                     .height(64.dp)
                     .clip(RoundedCornerShape(12.dp))
-                    .background(c.surfaceAlt)
-                    .focusRequester(focusRequester)
-                    .padding(horizontal = 12.dp)
-            )
+                    .background(c.surfaceAlt),
+                contentAlignment = Alignment.Center
+            ) {
+                // Visible digits — centered, no cursor
+                Txt(
+                    if (buffer.isEmpty()) "—" else buffer,
+                    28,
+                    FontWeight.Bold,
+                    if (buffer.isEmpty()) c.muted else c.onBackground,
+                    align = TextAlign.Center
+                )
+                // Invisible overlay for actual input + cursor.
+                // Text color is transparent so only the blinking cursor shows; the
+                // text is right-aligned so the cursor rides the right edge of the field.
+                BasicTextField(
+                    value = buffer,
+                    onValueChange = { new ->
+                        val digitsOnly = new.filter { it.isDigit() }
+                        when {
+                            digitsOnly.length <= 2 -> buffer = digitsOnly
+                            else -> maxDigitsTick++
+                        }
+                    },
+                    singleLine = true,
+                    keyboardOptions = KeyboardOptions(
+                        keyboardType = KeyboardType.Number,
+                        imeAction = ImeAction.Done
+                    ),
+                    keyboardActions = KeyboardActions(
+                        onDone = {
+                            val parsed = buffer.toIntOrNull()
+                            if (parsed != null && parsed in 1..99) onConfirm(parsed)
+                        }
+                    ),
+                    cursorBrush = SolidColor(c.accentA),
+                    textStyle = TextStyle(
+                        color = Color.Transparent,
+                        fontSize = 28.sp,
+                        fontWeight = FontWeight.Bold,
+                        textAlign = TextAlign.End
+                    ),
+                    modifier = Modifier
+                        .fillMaxWidth()
+                        .focusRequester(focusRequester)
+                        .padding(horizontal = 16.dp)
+                )
+            }
         },
         confirmButton = {
             val parsed = buffer.toIntOrNull()

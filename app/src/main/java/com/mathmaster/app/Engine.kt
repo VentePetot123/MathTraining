@@ -225,6 +225,14 @@ class Store(context: Context) {
             .putInt("best_streak", 0)
             .apply()
     }
+
+    // FIX #8: perf — overwrite the cached totals with externally-computed values.
+    // Used by AdaptiveEngine.recomputeTotalsFromStats() after a per-category reset
+    // so the cache reflects "answers still stored" rather than "answers ever made."
+    fun setTotals(answers: Int, sessions: Int, best: Int) {
+        cachedTotals = Triple(answers, sessions, best)
+        totalsDirty = true
+    }
 }
 
 /**
@@ -299,6 +307,26 @@ class AdaptiveEngine(private val store: Store) {
         store.resetTotals()
     }
 
+    // FIX #8: perf — recompute the global counters from surviving per-category stats.
+    // Called after a per-category reset so the header no longer reflects answers that
+    // were just erased. `sessions` is NOT derived — we don't store sessions per
+    // category — so it stays as-is (it's a "how many sessions have you ever run?"
+    // counter, not a "how much data is stored?" counter). `best_streak` is recomputed
+    // from the max streak still present in any category.
+    fun recomputeTotalsFromStats() {
+        var totalCorrect = 0
+        var totalIncorrect = 0
+        var bestStreak = 0
+        for (cat in Categories.all) {
+            val map = stats(cat.id)
+            for (s in map.values) {
+                totalCorrect += s.correct
+                totalIncorrect += s.incorrect
+                if (s.streak > bestStreak) bestStreak = s.streak
+            }
+        }
+        store.setTotals(totalCorrect + totalIncorrect, store.sessions(), bestStreak)
+    }
     // FIX #8: perf — snapshot per-session aggregate for the dashboard trend chart.
     fun recordSession(cat: String, score: Int, total: Int, avgMs: Int) {
         if (total <= 0) return

@@ -53,6 +53,7 @@ private tailrec fun gcd(a: Int, b: Int): Int = if (b == 0) a else gcd(b, a % b)
 // FIX #12: faster than String.format for the small number of decimal places we use.
 // Behaviourally identical to "%.Nf" + trimEnd('0') + trimEnd('.').
 private fun fmt(v: Double, places: Int): String {
+    if (v.isInfinite() || v.isNaN()) return "0"
     val scale = when (places) {
         2 -> 100.0
         4 -> 10_000.0

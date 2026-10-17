@@ -335,24 +335,22 @@ fun Stepper(
     // to the LAST parameter only, so `onChange` must be last.
     maxDigits: Int = 2,
     maxValue: Int = 99,
+    hardMax: Int? = null,   // FIX #8 — per-category hard limit (overrides maxValue if set)
     onChange: (Int) -> Unit
 ) {
+    // The effective max for this stepper. If `hardMax` is provided (e.g. by the
+    // RangeScreen for the "From"/"To" steppers), it caps the max value. Otherwise
+    // the default `maxValue` (99 or 200) applies.
+    val effectiveMax = hardMax ?: maxValue
+    val effectiveDigits = if (effectiveMax >= 100) 3 else 2
     // FIX #8 — snap to multiples of `step` when the current value is off-step.
-    // E.g. with step = 5:
-    //   minus(4) = 1     (4 → next lower multiple → none in range → 1)
-    //   minus(6) = 5
-    //   minus(20) = 15
-    //   plus(4)  = 5
-    //   plus(6)  = 10
-    //   plus(20) = 25
     fun nextUp(v: Int): Int {
         val snapped = ((v / step) + 1) * step
-        return snapped.coerceIn(1, maxValue)
+        return snapped.coerceIn(1, effectiveMax)
     }
     fun nextDown(v: Int): Int {
-        // If v is exactly on a multiple, step down one; else round down to nearest.
         val snapped = if (v % step == 0) v - step else (v / step) * step
-        return snapped.coerceIn(1, maxValue)
+        return snapped.coerceIn(1, effectiveMax)
     }
     val c = AppTheme.colors
     // FIX #8: perf — the middle value is now tap-to-edit. Tapping it opens a compact
@@ -378,12 +376,12 @@ fun Stepper(
     if (editing) {
         NumberInputDialog(
             initial = value,
-            maxDigits = maxDigits,
-            maxValue = maxValue,
+            maxDigits = effectiveDigits,
+            maxValue = effectiveMax,
             onDismiss = { editing = false },
             onConfirm = { picked ->
                 editing = false
-                onChange(picked.coerceIn(1, maxValue))     // clamp with the field's own limit
+                onChange(picked.coerceIn(1, effectiveMax))     // clamp with the field's own limit
             }
         )
     }

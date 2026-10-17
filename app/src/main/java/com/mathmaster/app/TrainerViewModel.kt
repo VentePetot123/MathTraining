@@ -278,7 +278,11 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         if (isNavigating) return
         when (screen) {
             Screen.Training -> showQuit = true
-            Screen.Range, Screen.Results, Screen.Progress, Screen.CategoryDetail -> toMenu()
+            // FIX #8 — CategoryDetail backs to Progress, not Menu. The Progress
+            // Dashboard is the "parent" of a category detail, so Back should return
+            // there — matching the header chevron's destination.
+            Screen.CategoryDetail -> openProgress()
+            Screen.Range, Screen.Results, Screen.Progress -> toMenu()
             else -> Unit
         }
     }
@@ -403,7 +407,14 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         // in flight, we must not touch ui/runtime/countdown because we might bail
         // inside navigateTo and leave dangling state behind.
         if (isNavigating) return
-        if (screen != Screen.Range && screen != Screen.Results) return   // only from valid screens
+        // FIX #8 — allow startSession from Range, Results, AND CategoryDetail.
+        // The CategoryDetail screen's "Start Practice" button routes here, but the
+        // old guard only allowed Range and Results, so taps on CategoryDetail were
+        // silently ignored.
+        if (screen != Screen.Range &&
+            screen != Screen.Results &&
+            screen != Screen.CategoryDetail
+        ) return
 
         advanceJob?.cancel()
         val c = selected

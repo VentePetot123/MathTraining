@@ -72,30 +72,18 @@ fun AppRoot(vm: TrainerViewModel) {
             AnimatedContent(
                 targetState = vm.screen,
                 transitionSpec = {
-                    // FIX #8: perf — for Menu ↔ Dashboard ↔ CategoryDetail (which mount
-                    // LazyVerticalGrids and compute Canvas charts), the slide transition
-                    // was allocating hundreds of KB per frame for two full screens. That
-                    // triggered a GC pause every ~15 taps, manifesting as a single
-                    // stutter mid-slide. For these routes we use a simple 140ms fade —
-                    // single incoming layer, minimal allocation, zero GC pressure.
-                    //
-                    // Other routes (Range, Training, Results) keep the slide since they
-                    // are lighter and the slide feels natural there.
-                    val heavyScreens = setOf(
-                        Screen.Menu, Screen.Progress, Screen.CategoryDetail
-                    )
-                    val useFade = targetState in heavyScreens || initialState in heavyScreens
-                    if (useFade) {
-                        fadeIn(tween(140)) togetherWith fadeOut(tween(140))
-                    } else {
-                        val forward = targetState.ordinal > initialState.ordinal
-                        slideInHorizontally(animationSpec = tween(220)) { w ->
-                            if (forward) w / 5 else -w / 5
-                        } togetherWith
-                            slideOutHorizontally(animationSpec = tween(220)) { w ->
-                                if (forward) -w / 5 else w / 5
-                            }
-                    }
+                    // FIX #8: perf — restored the slide for every transition. The lag
+                    // previously attributed to "slide vs fade" was actually the destination
+                    // screen's card composition stuttering the animation. That's now fixed
+                    // at the source (VM preloads dashboard data before navigating), so the
+                    // slide itself is free to run without competing for main-thread work.
+                    val forward = targetState.ordinal > initialState.ordinal
+                    slideInHorizontally(animationSpec = tween(240)) { w ->
+                        if (forward) w / 4 else -w / 4
+                    } togetherWith
+                        slideOutHorizontally(animationSpec = tween(240)) { w ->
+                            if (forward) -w / 4 else w / 4
+                        }
                 },
                 label = "screens"
             ) { s ->

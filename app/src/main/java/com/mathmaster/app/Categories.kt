@@ -2,9 +2,7 @@ package com.mathmaster.app
 
 import androidx.compose.ui.graphics.Color
 import java.math.BigInteger
-import java.util.Locale
 import kotlin.math.abs
-import kotlin.math.min
 
 enum class Kind { INT, PCT, DEC, FRAC }
 
@@ -276,8 +274,8 @@ object Categories {
             Color(0xFFF2994A), Color(0xFFE5A100), 1, 10, 100, false, ::genCubes),
         Category("fdp", "Fractions, Decimals, Percentages", "%", "Fraction, decimal and percentage equivalents (range = denominators)",
             Color(0xFF56AB2F), Color(0xFF2E8B57), 1, 10, 100, true, ::genFdp),
-        Category("integers", "Integers", "ℤ", "Absolute values and distances",
-            Color(0xFF00D2FF), Color(0xFF3A7BD5), 1, 10, 20, false, ::genIntegers),
+        Category("integers", "Integers", "ℤ", "Add, subtract, multiply and divide with negatives",
+            Color(0xFF00D2FF), Color(0xFF3A7BD5), 1, 10, 100, false, ::genIntegers),
         Category("powers2", "Powers of 2", "2ⁿ", "Powers of 2",
             Color(0xFFFF416C), Color(0xFFFF4B2B), 1, 10, 100, false, ::genPowers2),
         Category("powers3", "Powers of 3", "3ⁿ", "Powers of 3",

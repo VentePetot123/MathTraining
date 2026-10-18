@@ -97,7 +97,9 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         private set
     fun toggleSound() {
         soundEnabled = !soundEnabled
-        if (soundEnabled) soundManager.playCorrect()   // confirmation ding on unmute
+        // FIX #8 — no confirmation sound on toggle. The icon change (waves vs X)
+        // is visual feedback enough; playing a sound just to confirm the sound
+        // setting was annoying, especially when muting in public.
         store.setSoundEnabled(soundEnabled)
     }
 

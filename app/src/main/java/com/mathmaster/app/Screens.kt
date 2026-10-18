@@ -448,7 +448,8 @@ fun TrainingScreen(vm: TrainerViewModel) {
                 onKey = vm::onKey,
                 onDelete = vm::onDelete,
                 onClear = vm::onClear,
-                onSubmit = vm::submit
+                onSubmit = vm::submit,
+                signedKeys = (cat.id == "integers") // Show minus button for Integers
             )
         }
 
@@ -647,7 +648,8 @@ fun Keypad(
     onKey: (String) -> Unit,
     onDelete: () -> Unit,
     onClear: () -> Unit,
-    onSubmit: () -> Unit
+    onSubmit: () -> Unit,
+    signedKeys: Boolean = false // FIX #8 — show minus button for Integers
 ) {
     // FIX #8: perf — capture callbacks via rememberUpdatedState so the lambda
     // reference doesn't change identity on each recomposition of TrainingScreen.
@@ -683,6 +685,12 @@ fun Keypad(
                 KeyButton(".", Modifier.weight(1f), enabled) { onKeyLatest.value(".") }
                 KeyButton("/", Modifier.weight(1f), enabled) { onKeyLatest.value("/") }
                 KeyButton("%", Modifier.weight(1f), enabled) { onKeyLatest.value("%") }
+            }
+        } else if (signedKeys) {
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                KeyButton("−", Modifier.weight(1f), enabled) { onKeyLatest.value("-") }
+                Spacer(Modifier.weight(1f))
+                Spacer(Modifier.weight(1f))
             }
         }
         GradientButton(

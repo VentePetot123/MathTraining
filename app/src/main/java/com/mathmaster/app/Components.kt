@@ -334,38 +334,23 @@ fun Stepper(
     label: String,
     value: Int,
     step: Int,
-    // FIX #8 — per-field caps moved BEFORE onChange so the trailing-lambda pattern
-    // `Stepper(...) { onChange(it) }` still compiles. Kotlin binds trailing lambdas
-    // to the LAST parameter only, so `onChange` must be last.
-    maxDigits: Int = 2,
-    maxValue: Int = 99,
-    hardMax: Int? = null,   // FIX #8 — per-category hard limit (overrides maxValue if set)
+    maxDigits: Int = 3,
+    maxValue: Int = 100,
+    hardMax: Int = maxValue,
     onChange: (Int) -> Unit
 ) {
-    // The effective max for this stepper. If `hardMax` is provided (e.g. by the
-    // RangeScreen for the "From"/"To" steppers), it caps the max value. Otherwise
-    // the default `maxValue` (99 or 200) applies.
-    val effectiveMax = hardMax ?: maxValue
-    val effectiveDigits = if (effectiveMax >= 100) 3 else 2
-    // FIX #8 — snap to multiples of `step` when the current value is off-step.
-    fun nextUp(v: Int): Int {
-        val snapped = ((v / step) + 1) * step
-        return snapped.coerceIn(1, effectiveMax)
-    }
+    val cap = minOf(maxValue, hardMax)
+    fun nextUp(v: Int): Int = (((v / step) + 1) * step).coerceIn(1, cap)
     fun nextDown(v: Int): Int {
         val snapped = if (v % step == 0) v - step else (v / step) * step
-        return snapped.coerceIn(1, effectiveMax)
+        return snapped.coerceIn(1, cap)
     }
     val c = AppTheme.colors
-    // FIX #8: perf — the middle value is now tap-to-edit. Tapping it opens a compact
-    // numeric keypad dialog; confirming clamps the value to 1..99 before calling
-    // onChange, so out-of-range input can never leak into the VM.
     var editing by remember { mutableStateOf(false) }
 
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Txt(label, 13, FontWeight.Medium, c.muted, Modifier.weight(1f))
-        RoundButtonSmallInstant("−") { onChange(nextDown(value)) }
-        // Tap target for the value
+        RoundButtonSmall("−") { onChange(nextDown(value)) }
         Box(
             Modifier
                 .width(52.dp)
@@ -374,18 +359,18 @@ fun Stepper(
         ) {
             Txt(value.toString(), 18, FontWeight.Bold, c.onBackground, align = TextAlign.Center)
         }
-        RoundButtonSmallInstant("+") { onChange(nextUp(value)) }
+        RoundButtonSmall("+") { onChange(nextUp(value)) }
     }
 
     if (editing) {
         NumberInputDialog(
             initial = value,
-            maxDigits = effectiveDigits,
-            maxValue = effectiveMax,
+            maxDigits = maxDigits,
+            maxValue = cap,
             onDismiss = { editing = false },
             onConfirm = { picked ->
                 editing = false
-                onChange(picked.coerceIn(1, effectiveMax))     // clamp with the field's own limit
+                onChange(picked.coerceIn(1, cap))
             }
         )
     }

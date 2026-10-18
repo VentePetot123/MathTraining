@@ -688,8 +688,11 @@ fun Keypad(
             }
         } else if (signedKeys) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                KeyButton("−", Modifier.weight(1f), enabled) { onKeyLatest.value("-") }
+                // FIX #8 — empty slot on the left
                 Spacer(Modifier.weight(1f))
+                // FIX #8 — "−" key centered in the middle column (directly under "0")
+                KeyButton("−", Modifier.weight(1f), enabled) { onKeyLatest.value("-") }
+                // FIX #8 — empty slot on the right
                 Spacer(Modifier.weight(1f))
             }
         }

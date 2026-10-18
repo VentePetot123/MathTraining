@@ -1,5 +1,6 @@
 package com.mathmaster.app
 
+import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
@@ -57,6 +58,7 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
@@ -502,6 +504,67 @@ private fun ChartPanel(
         ) {
             Txt("Oldest", 10, FontWeight.Normal, muted)
             Txt("Latest", 10, FontWeight.Normal, muted)
+        }
+    }
+}
+
+// FIX #8 — Sound on/off toggle. Draws a speaker icon in code (via Canvas) so it
+// looks identical on every device, avoiding the platform-specific emoji look.
+// When enabled: accent tint + speaker with two sound waves. When muted: grey tint
+// + speaker with an X where the waves would be. The tint fades via animateColorAsState.
+@Composable
+fun SoundToggle(enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val c = AppTheme.colors
+    val tint by animateColorAsState(
+        targetValue = if (enabled) c.accentA else c.muted,
+        animationSpec = tween(200),
+        label = "soundTint"
+    )
+    val bg = if (enabled) c.accentA.copy(alpha = 0.16f) else c.surfaceAlt
+
+    Box(
+        modifier
+            .size(44.dp)
+            .bounceClick(CircleShape, 0.dp, onClick = onClick)
+            .background(bg, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(Modifier.size(22.dp)) {
+            val w = size.width
+            val sw = w * 0.11f
+
+            // Speaker body
+            val body = Path().apply {
+                moveTo(w * 0.08f, w * 0.38f)
+                lineTo(w * 0.28f, w * 0.38f)
+                lineTo(w * 0.50f, w * 0.18f)
+                lineTo(w * 0.50f, w * 0.82f)
+                lineTo(w * 0.28f, w * 0.62f)
+                lineTo(w * 0.08f, w * 0.62f)
+                close()
+            }
+            drawPath(body, tint)
+
+            if (enabled) {
+                // Two sound waves emanating to the right
+                val cx = w * 0.50f
+                val cy = w * 0.50f
+                for (r in floatArrayOf(w * 0.20f, w * 0.38f)) {
+                    drawArc(
+                        color = tint,
+                        startAngle = -45f,
+                        sweepAngle = 90f,
+                        useCenter = false,
+                        topLeft = Offset(cx - r, cy - r),
+                        size = Size(r * 2, r * 2),
+                        style = Stroke(width = sw, cap = StrokeCap.Round)
+                    )
+                }
+            } else {
+                // Muted: an X where the waves would be
+                drawLine(tint, Offset(w * 0.66f, w * 0.36f), Offset(w * 0.92f, w * 0.64f), sw, StrokeCap.Round)
+                drawLine(tint, Offset(w * 0.92f, w * 0.36f), Offset(w * 0.66f, w * 0.64f), sw, StrokeCap.Round)
+            }
         }
     }
 }

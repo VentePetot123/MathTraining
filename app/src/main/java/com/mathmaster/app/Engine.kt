@@ -2,27 +2,29 @@ package com.mathmaster.app
 
 import android.content.Context
 import org.json.JSONObject
+import kotlin.math.exp
 import kotlin.math.max
 import kotlin.math.min
+import kotlin.math.pow
 import kotlin.random.Random
 
 /** Per-question statistics (persisted). */
 data class QStat(
     var correct: Int = 0,
     var incorrect: Int = 0,
-    var avgMs: Double = 0.0,        // average response time
-    var lastSeen: Long = 0L,        // epoch millis
-    var difficulty: Double = 50.0,  // 5 (easy) .. 100 (hard)
-    var streak: Int = 0             // consecutive correct answers
+    var avgMs: Double = 0.0,
+    var lastSeen: Long = 0L,
+    var difficulty: Double = 50.0,
+    var streak: Int = 0,
+    var stability: Double = 0.0,      // memory strength in days (0 = not modelled yet)
+    var memDifficulty: Double = 0.0   // 1..10 (0 = not modelled yet)
 ) {
     val attempts: Int get() = correct + incorrect
 }
 
 data class CatSummary(val attempts: Int, val accuracyPct: Int, val facts: Int)
 
-// FIX #8: perf — lightweight per-session aggregate for the dashboard trend chart.
-// Persisted as a compact "acc1,ms1;acc2,ms2;..." string per category (no JSON overhead).
-data class SessionPoint(val accuracyPct: Int, val avgMs: Int)
+data class SessionPoint(val accuracyPct: Int, val avgMs: Int, val at: Long = 0L)
 
 class Outcome(val improved: Boolean, val requeue: Boolean)
 
@@ -56,7 +58,8 @@ class Store(context: Context) {
                 val j = o.getJSONObject(k)
                 m[k] = QStat(
                     j.optInt("c"), j.optInt("i"), j.optDouble("a", 0.0),
-                    j.optLong("t"), j.optDouble("d", 50.0), j.optInt("s")
+                    j.optLong("t"), j.optDouble("d", 50.0), j.optInt("s"),
+                    j.optDouble("st", 0.0), j.optDouble("md", 0.0)
                 )
             }
             m
@@ -77,6 +80,8 @@ class Store(context: Context) {
             j.put("t", s.lastSeen)
             j.put("d", s.difficulty)
             j.put("s", s.streak)
+            j.put("st", s.stability)
+            j.put("md", s.memDifficulty)
             o.put(k, j)
         }
         prefs.edit().putString("stats_$cat", o.toString()).apply()
@@ -137,9 +142,12 @@ class Store(context: Context) {
         return try {
             raw.split(';').mapNotNull { seg ->
                 val p = seg.split(',')
-                if (p.size != 2) null
-                else SessionPoint(p[0].toIntOrNull() ?: return@mapNotNull null,
-                                  p[1].toIntOrNull() ?: return@mapNotNull null)
+                if (p.size < 2) null
+                else SessionPoint(
+                    p[0].toIntOrNull() ?: return@mapNotNull null,
+                    p[1].toIntOrNull() ?: return@mapNotNull null,
+                    p.getOrNull(2)?.toLongOrNull() ?: 0L
+                )
             }.toMutableList()
         } catch (e: Exception) {
             prefs.edit().remove("hist_$cat").apply()
@@ -148,7 +156,7 @@ class Store(context: Context) {
     }
 
     fun saveHistory(cat: String, h: List<SessionPoint>) {
-        val s = h.takeLast(100).joinToString(";") { "${it.accuracyPct},${it.avgMs}" }
+        val s = h.takeLast(100).joinToString(";") { "${it.accuracyPct},${it.avgMs},${it.at}" }
         prefs.edit().putString("hist_$cat", s).apply()
     }
 
@@ -235,6 +243,59 @@ class Store(context: Context) {
     }
 }
 
+/** FSRS-4.5 style memory model: stability (days), difficulty (1-10), retrievability. */
+object Fsrs {
+    private const val DECAY = -0.5
+    private const val FACTOR = 19.0 / 81.0
+    private val W = doubleArrayOf(
+        0.4872, 1.4003, 3.7145, 13.8206, 5.1618, 1.2298, 0.8975, 0.031,
+        1.6474, 0.1367, 1.0461, 2.1072, 0.0793, 0.3246, 1.587, 0.2272, 2.8755
+    )
+
+    fun retrievability(elapsedDays: Double, stability: Double): Double =
+        if (stability <= 0.0) 0.0
+        else (1.0 + FACTOR * max(0.0, elapsedDays) / stability).pow(DECAY)
+
+    fun expectedMs(f: Fact): Double {
+        val cost = f.prompt.count { it.isDigit() } * 2 + f.answer.length
+        return 1200.0 + 150.0 * cost
+    }
+
+    fun grade(correct: Boolean, ms: Double, expected: Double): Int = when {
+        !correct -> 1
+        ms >= 2.0 * expected -> 2
+        ms <= 0.7 * expected -> 4
+        else -> 3
+    }
+
+    fun update(s: QStat, grade: Int, elapsedDays: Double) {
+        if (s.stability <= 0.0 || s.memDifficulty <= 0.0) {
+            if (s.attempts > 1) {
+                s.stability = 1.0 + s.streak.coerceAtMost(5) * 1.5
+                s.memDifficulty = (s.difficulty / 10.0).coerceIn(1.0, 10.0)
+            } else {
+                s.stability = W[grade - 1].coerceAtLeast(0.05)
+                s.memDifficulty = (W[4] - W[5] * (grade - 3)).coerceIn(1.0, 10.0)
+                return
+            }
+        }
+        val r = retrievability(elapsedDays, s.stability)
+        val d = s.memDifficulty
+        val next = if (grade == 1) {
+            (W[11] * d.pow(-W[12]) * ((s.stability + 1).pow(W[13]) - 1) * exp((1 - r) * W[14]))
+                .coerceIn(0.05, s.stability)
+        } else {
+            val hard = if (grade == 2) W[15] else 1.0
+            val easy = if (grade == 4) W[16] else 1.0
+            s.stability * (1 + exp(W[8]) * (11 - d) * s.stability.pow(-W[9]) *
+                (exp((1 - r) * W[10]) - 1) * hard * easy)
+        }
+        s.stability = next.coerceIn(0.05, 3650.0)
+        val d0Easy = W[4] - W[5]
+        s.memDifficulty = (W[7] * d0Easy + (1 - W[7]) * (d - W[6] * (grade - 3))).coerceIn(1.0, 10.0)
+    }
+}
+
 /**
  * Adaptive spaced-repetition-style engine.
  *  - Weighted selection: hard / frequently-missed questions appear more, mastered ones less.
@@ -296,10 +357,25 @@ class AdaptiveEngine(private val store: Store) {
     fun mastery(cat: String): Triple<Int, Int, Int> {   // (mastered%, learning%, struggling%)
         val all = stats(cat).values.filter { it.attempts > 0 }
         if (all.isEmpty()) return Triple(0, 0, 0)
-        val mastered = all.count { it.difficulty <= 20.0 && it.streak >= 3 }
-        val struggling = all.count { it.difficulty >= 60.0 || (it.incorrect > it.correct) }
-        val learning = all.size - mastered - struggling
+        val now = System.currentTimeMillis()
+        var mastered = 0
+        var struggling = 0
+        for (s in all) {
+            if (s.stability > 0.0) {
+                val r = Fsrs.retrievability((now - s.lastSeen) / 86_400_000.0, s.stability)
+                when {
+                    s.stability >= 7.0 && r >= 0.85 && s.correct >= 3 -> mastered++
+                    r < 0.6 || s.memDifficulty >= 8.0 -> struggling++
+                }
+            } else {   // not modelled yet: old rules
+                when {
+                    s.difficulty <= 20.0 && s.streak >= 3 -> mastered++
+                    s.difficulty >= 60.0 || s.incorrect > s.correct -> struggling++
+                }
+            }
+        }
         val t = all.size
+        val learning = t - mastered - struggling
         return Triple(mastered * 100 / t, learning * 100 / t, struggling * 100 / t)
     }
     @Synchronized
@@ -358,7 +434,7 @@ class AdaptiveEngine(private val store: Store) {
     fun recordSession(cat: String, score: Int, total: Int, avgMs: Int) {
         if (total <= 0) return
         val h = histories.getOrPut(cat) { store.loadHistory(cat) }
-        h.add(SessionPoint(score * 100 / total, avgMs))
+        h.add(SessionPoint(score * 100 / total, avgMs, System.currentTimeMillis()))
         while (h.size > 100) h.removeAt(0)
         dirty.add(cat)
     }
@@ -381,6 +457,13 @@ class AdaptiveEngine(private val store: Store) {
 
     private fun weight(s: QStat?, now: Long): Double {
         if (s == null) return 3.0
+        if (s.stability > 0.0) {
+            val days = max(0.0, (now - s.lastSeen) / 86_400_000.0)
+            val r = Fsrs.retrievability(days, s.stability)
+            var w = 0.2 + 8.0 * (1.0 - r) + 0.3 * s.memDifficulty
+            if (s.streak == 0 && s.incorrect > 0) w *= 1.5
+            return w
+        }
         var w = 1.0 + s.difficulty / 20.0                       // 1.25 .. 6
         if (s.streak >= 3 && s.difficulty <= 20.0) {            // mastered: rare, but spaced-repetition
             val days = max(0.0, (now - s.lastSeen) / 86_400_000.0)
@@ -459,7 +542,12 @@ class AdaptiveEngine(private val store: Store) {
         }
         s.difficulty = s.difficulty.coerceIn(5.0, 100.0)
         s.avgMs = if (had) (prevAvg * n + t) / (n + 1) else t
-        s.lastSeen = System.currentTimeMillis()
+        // Memory-model update: uses the real time since this fact was last seen.
+        val nowMs = System.currentTimeMillis()
+        val elapsedDays = if (s.lastSeen > 0L) (nowMs - s.lastSeen) / 86_400_000.0 else 0.0
+        val baseline = if (had && n >= 5) 0.5 * prevAvg + 0.5 * Fsrs.expectedMs(f) else Fsrs.expectedMs(f)
+        Fsrs.update(s, Fsrs.grade(correct, t, baseline), elapsedDays)
+        s.lastSeen = nowMs
 
         val w = window(cat)
         w.add(correct)
@@ -478,11 +566,21 @@ class AdaptiveEngine(private val store: Store) {
         val w = window(cat)
         if (w.size >= WINDOW && rt.sinceIntro >= 3 && rt.unseen.isNotEmpty()) {
             val acc = w.count { it }.toDouble() / w.size
-            if (acc >= THRESHOLD) {
+            if (acc >= THRESHOLD && dueCount(cat, rt) <= 5) {
                 rt.pool.add(rt.unseen.removeAt(0))
                 rt.sinceIntro = 0
                 rt.introduced++
             }
+        }
+    }
+
+    private fun dueCount(cat: String, rt: SessionRuntime): Int {
+        val st = stats(cat)
+        val now = System.currentTimeMillis()
+        return rt.pool.count { f ->
+            val s = st[f.key]
+            s != null && s.stability > 0.0 &&
+                Fsrs.retrievability((now - s.lastSeen) / 86_400_000.0, s.stability) < 0.8
         }
     }
 

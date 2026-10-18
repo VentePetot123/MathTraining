@@ -396,6 +396,12 @@ fun RangeScreen(vm: TrainerViewModel) {
 @Composable
 private fun formatAttempts(n: Int): String = if (n > 999) "999+" else n.toString()
 
+// FIX #8 — Simple text helper used inside AlertDialog title/text lambdas throughout
+// the app. Was accidentally deleted during the formatAttempts addition; restored
+// here to resolve the 8 "Unresolved reference: Text2" compile errors.
+@Composable
+private fun Text2(s: String) = Txt(s, 15, FontWeight.Normal, AppTheme.colors.onBackground)
+
 // =====================================================================
 // Training screen
 // =====================================================================

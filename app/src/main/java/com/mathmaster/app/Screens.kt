@@ -165,7 +165,13 @@ fun MenuScreen(vm: TrainerViewModel) {
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) { MenuHeader(vm) { vm.openProgress() } }
-        itemsIndexed(Categories.all) { index, cat ->
+        itemsIndexed(
+            Categories.all,
+            span = { index, _ ->
+                if (index == Categories.all.lastIndex && Categories.all.size % 2 == 1)
+                    GridItemSpan(maxLineSpan) else GridItemSpan(1)
+            }
+        ) { index, cat ->
             CategoryCard(index, cat, vm.menuStats[cat.id]) { vm.openCategory(cat) }
         }
     }
@@ -291,12 +297,20 @@ fun RangeScreen(vm: TrainerViewModel) {
                     lineHeight = 13
                 )
             }
-            // Visual affordance only — the ripple and click are on the parent Row.
+            // FIX #8 — same offset-compensation as ProgressHeader so the glyph is
+            // vertically centered in the box.
             Box(
                 Modifier.size(44.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Txt("‹", 34, FontWeight.Bold, Color.White, align = TextAlign.Center)
+                Txt(
+                    "‹",
+                    34,
+                    FontWeight.Bold,
+                    Color.White,
+                    align = TextAlign.Center,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
             }
         }
 
@@ -494,10 +508,11 @@ private fun HeaderBar(
         verticalAlignment = Alignment.CenterVertically
     ) {
         SoftButton("✕ Quit", size = 14, onClick = onQuit)
-        Spacer(Modifier.width(8.dp))
-        // FIX #8 — mute toggle. Uses the sound icon so it's self-explanatory.
-        SoftButton(if (soundEnabled) "🔊" else "🔇", size = 14, onClick = onToggleSound)
         Spacer(Modifier.weight(1f))
+        // FIX #8 — sound toggle now sits on the right, grouped with the session
+        // status. Custom-drawn speaker icon ensures identical look across devices.
+        SoundToggle(soundEnabled, onToggleSound)
+        Spacer(Modifier.width(12.dp))
         Column(horizontalAlignment = Alignment.End) {
             Txt("Q ${minOf(answered + 1, total)}/$total", 17, FontWeight.Bold)
             Txt("Score $score · Streak $streak 🔥", 12, FontWeight.Medium, c.muted)
@@ -624,7 +639,7 @@ fun QuestionCard(u: UiSession, onShown: () -> Unit = {}) {
         }
 
         // Result strip: answer on top (green/red), time below at half size.
-        Box(Modifier.fillMaxWidth().height(46.dp), contentAlignment = Alignment.Center) {
+        Box(Modifier.fillMaxWidth().heightIn(min = 46.dp), contentAlignment = Alignment.Center) {
             when (u.feedback) {
                 Feedback.None -> {
                     if (u.hint != null) {
@@ -643,7 +658,16 @@ fun QuestionCard(u: UiSession, onShown: () -> Unit = {}) {
                             horizontalArrangement = Arrangement.spacedBy(6.dp)
                         ) {
                             FeedbackMark(ok, u.seq, Modifier.size(22.dp))
-                            Txt(fact.answer, 20, FontWeight.ExtraBold, resultColor)
+                            val longAns = fact.answer.length > 14
+                            Text(
+                                text = if (longAns) fact.answer.chunked(20).joinToString("\n") else fact.answer,
+                                color = resultColor,
+                                fontSize = (if (longAns) 13 else 20).sp,
+                                lineHeight = (if (longAns) 18 else 24).sp,
+                                fontWeight = FontWeight.ExtraBold,
+                                textAlign = TextAlign.Center,
+                                modifier = Modifier.weight(1f, fill = false)
+                            )
                         }
                         Txt(
                             "Time: " + String.format(Locale.US, "%.1f", u.lastMs / 1000.0) + " sec",
@@ -1033,12 +1057,20 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
                 Txt(cat.name, 18, FontWeight.ExtraBold, Color.White)
                 Txt("Detailed progress", 11, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
             }
-            // Visual affordance only — the ripple and click are on the parent Row.
+            // FIX #8 — same 2dp top-padding compensation for the glyph baseline so
+            // the chevron is perfectly centered in its 44dp box.
             Box(
                 Modifier.size(44.dp),
                 contentAlignment = Alignment.Center
             ) {
-                Txt("‹", 34, FontWeight.Bold, Color.White, align = TextAlign.Center)
+                Txt(
+                    "‹",
+                    34,
+                    FontWeight.Bold,
+                    Color.White,
+                    align = TextAlign.Center,
+                    modifier = Modifier.padding(top = 2.dp)
+                )
             }
         }
 
@@ -1138,12 +1170,21 @@ fun ProgressHeader(title: String, subtitle: String, onBack: () -> Unit) {
             Txt(title, 22, FontWeight.ExtraBold, Color.White)
             Txt(subtitle, 13, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
         }
-        // Visual affordance only — the ripple and click are handled by the parent Row.
+        // FIX #8 — the glyph "‹" has asymmetric ascender/descender space, so a plain
+        // Txt looks slightly off-center. Wrapping in a Box with contentAlignment =
+        // Center forces the glyph to be visually centered inside the 44dp box.
         Box(
             Modifier.size(44.dp),
             contentAlignment = Alignment.Center
         ) {
-            Txt("‹", 34, FontWeight.Bold, Color.White, align = TextAlign.Center)
+            Txt(
+                "‹",
+                34,
+                FontWeight.Bold,
+                Color.White,
+                align = TextAlign.Center,
+                modifier = Modifier.padding(top = 2.dp) // compensate for glyph baseline
+            )
         }
     }
 }

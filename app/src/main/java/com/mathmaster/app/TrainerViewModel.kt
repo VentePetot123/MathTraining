@@ -208,6 +208,11 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun refreshMenu() {
         menuStats = Categories.all.associate { it.id to engine.summary(it.id) }
+        // FIX #8 — Recompute global totals from the actual saved data every time the
+        // menu refreshes. This is the single source of truth for Answers, Sessions,
+        // and Best Streak, so both Reset Category and Reset All Progress will
+        // immediately reflect the correct decreased numbers.
+        engine.recomputeTotalsFromStats()
         totals = Totals(store.totalAnswers(), store.sessions(), store.bestStreak())
     }
 
@@ -608,7 +613,8 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         // but we still dispatch the flush-heavy work at session end.
         val out = engine.record(u.categoryId, f, verdict, ms.toDouble())
         engine.introduceIfReady(u.categoryId, rt)
-        store.bumpAnswers()
+        // FIX #8 — Do NOT manually bump global counters here. They are now derived
+        // automatically from the actual category stats whenever the menu refreshes.
 
         if (out.improved) rt.improved++
         // FIX #13: cap the reintroduction queue so it stays O(1)-ish for pick().
@@ -621,7 +627,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         if (!verdict) rt.missed[f.key] = f
 
         val streak = if (verdict) u.streak + 1 else 0
-        store.updateBest(streak)
+        // FIX #8 — Do NOT update best streak here. It is derived automatically.
 
         // FIX #8 — play the appropriate sound effect (if enabled). Fired BEFORE the
         // UI update so the sound and visual feedback feel synchronized.
@@ -678,11 +684,10 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         val score = u.score
         val total = u.total
         val avgMs = if (rt.answerCount > 0) (rt.totalMs / rt.answerCount).toInt() else 0
-        // FIX #8 — bump the session count only when the session is finished (not on
-        // start). This means abandoning a session mid-way via Quit/Back does not
-        // count as a completed session. Persist everything on IO; navigation happens
-        // via navigateTo below.
-        store.bumpSessions()
+        // FIX #8 — The session is recorded in engine.recordSession() below. We no
+        // longer manually bump the global session counter because refreshMenu() now
+        // derives it from the actual category history lists. This ensures "Reset
+        // Category" properly decreases the global session count.
         viewModelScope.launch(Dispatchers.IO) {
             engine.recordSession(cat, score, total, avgMs)
             engine.flush()

@@ -483,6 +483,9 @@ private fun HeaderBar(answered: Int, total: Int, score: Int, streak: Int, onQuit
     ) {
         SoftButton("✕ Quit", size = 14, onClick = onQuit)
         Spacer(Modifier.weight(1f))
+        // FIX #8 — quick mute toggle in the header.
+        SoftButton(if (vm.soundEnabled) "🔊" else "🔇", size = 14, onClick = { vm.toggleSound() })
+        Spacer(Modifier.width(8.dp))
         Column(horizontalAlignment = Alignment.End) {
             Txt("Q ${minOf(answered + 1, total)}/$total", 17, FontWeight.Bold)
             Txt("Score $score · Streak $streak 🔥", 12, FontWeight.Medium, c.muted)

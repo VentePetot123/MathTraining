@@ -215,12 +215,16 @@ fun CategoryCard(index: Int, cat: Category, s: CatSummary?, onClick: () -> Unit)
             Text(
                 text = cat.name,
                 color = Color.White,
-                fontSize = 14.sp,
-                fontWeight = FontWeight.Bold,
+                // FIX #8 — title is now 16sp ExtraBold (was 14sp Bold) so it reads as
+                // a proper header. lineHeight set to 18sp gives a clean compact lead.
+                fontSize = 16.sp,
+                fontWeight = FontWeight.ExtraBold,
                 maxLines = 2,
                 overflow = TextOverflow.Ellipsis,
-                lineHeight = 16.sp
+                lineHeight = 18.sp
             )
+            // FIX #8 — small spacer for breathing room between title and stat.
+            Spacer(Modifier.height(2.dp))
             val stat = if (s == null || s.attempts == 0) "Not practiced yet"
             else "${s.accuracyPct}% acc · ${s.facts} facts"
             Txt(stat, 11, FontWeight.Medium, Color.White.copy(alpha = 0.85f))
@@ -265,11 +269,25 @@ fun RangeScreen(vm: TrainerViewModel) {
         ) {
             Txt(cat.symbol, 26, FontWeight.Bold, Color.White)
             Spacer(Modifier.width(12.dp))
-            Column(Modifier.weight(1f)) {
-                Txt(cat.name, 18, FontWeight.ExtraBold, Color.White)
-                // FIX #8 — tightened line height so multi-line blurb descriptions
-                // don't take unnecessary vertical space.
-                Txt(cat.blurb, 11, FontWeight.Normal, Color.White.copy(alpha = 0.9f), lineHeight = 13)
+            Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                // FIX #8 — Title: ExtraBold, with a tight lineHeight so 2-line names
+                // like "Fractions, Decimals, Percentages" stack cleanly.
+                Txt(
+                    cat.name,
+                    18,
+                    FontWeight.ExtraBold,
+                    Color.White,
+                    lineHeight = 20 // 18sp font → 20sp line height (compact but readable)
+                )
+                // FIX #8 — Blurb: normal weight, tight line height. The Column's
+                // spacedBy(2.dp) adds a clear but small gap between title and blurb.
+                Txt(
+                    cat.blurb,
+                    11,
+                    FontWeight.Normal,
+                    Color.White.copy(alpha = 0.9f),
+                    lineHeight = 13
+                )
             }
             // Visual affordance only — the ripple and click are on the parent Row.
             Box(

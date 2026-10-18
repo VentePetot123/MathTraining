@@ -655,6 +655,7 @@ fun QuestionCard(u: UiSession, onShown: () -> Unit = {}) {
                                 textAlign = TextAlign.Center,
                                 modifier = Modifier.weight(1f, fill = false)
                             )
+                            Spacer(Modifier.size(22.dp))   // <-- new line: mirrors the check/cross mark
                         }
                         Txt(
                             "Time: " + String.format(Locale.US, "%.1f", u.lastMs / 1000.0) + " sec",

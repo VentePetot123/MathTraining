@@ -60,6 +60,10 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     private val engineLazy = lazy { AdaptiveEngine(store) }   // lazy init: created in preload()
     private val engine: AdaptiveEngine get() = engineLazy.value
 
+    // FIX #8 — sound effects for correct/wrong feedback. Created once in the VM,
+    // pre-loads the two short clips into memory (SoundPool) for zero-latency playback.
+    private val soundManager = SoundManager(app)
+
     var screen by mutableStateOf(Screen.Loading)
         private set
     // FIX #8: perf — global navigation lock. Set to true on the first nav request,
@@ -87,6 +91,11 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     var totals by mutableStateOf(Totals(0, 0, 0))
         private set
     var showQuit by mutableStateOf(false)
+    // FIX #8 — sound on/off toggle. Persisted so it survives app restarts (optional —
+    // currently in-memory only; see note below).
+    var soundEnabled by mutableStateOf(true)
+        private set
+    fun toggleSound() { soundEnabled = !soundEnabled }
 
     // FIX #8: perf — countdown gate for a new session. While non-null, the training
     // screen renders a scrim + "Ready/Set/Solve!" and no question is shown yet.
@@ -361,6 +370,9 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
 
     override fun onCleared() {
         flush()
+        // FIX #8 — free the SoundPool. Without this, the audio buffers stay in
+        // memory for the whole process lifetime after the VM is destroyed.
+        soundManager.release()
         super.onCleared()
     }
 
@@ -603,6 +615,13 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
 
         val streak = if (verdict) u.streak + 1 else 0
         store.updateBest(streak)
+
+        // FIX #8 — play the appropriate sound effect (if enabled). Fired BEFORE the
+        // UI update so the sound and visual feedback feel synchronized.
+        if (soundEnabled) {
+            if (verdict) soundManager.playCorrect() else soundManager.playWrong()
+        }
+
         ui = u.copy(
             answered = u.answered + 1,
             score = u.score + if (verdict) 1 else 0,

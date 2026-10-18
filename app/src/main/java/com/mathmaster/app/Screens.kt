@@ -340,7 +340,7 @@ fun RangeScreen(vm: TrainerViewModel) {
         // ---- Compact stat line ----
         val s = vm.menuStats[cat.id]
         val statText = if (s == null || s.attempts == 0) "No practice data yet for this category"
-        else "${s.attempts} attempts · ${s.accuracyPct}% accuracy · ${s.facts} facts practiced"
+        else "${s.attempts} attempts · ${s.accuracyPct}% accuracy"
         Txt(statText, 11, FontWeight.Medium, c.muted, Modifier.fillMaxWidth(), TextAlign.Center)
 
         // FIX #8: perf — single action row.
@@ -404,7 +404,13 @@ fun TrainingScreen(vm: TrainerViewModel) {
                     // FIX #8: perf — the question card re-renders only when its own
                     // fields change. The keypad's `enabled` value is passed in as a
                     // primitive so it's a stability anchor.
-                    key(u.id) { QuestionCard(u) }
+                    key(u.id) {
+                        // FIX #8 — fire the "question is now visible" callback after
+                        // the entrance animation finishes (see LaunchedEffect inside
+                        // QuestionCard). This ensures the timer measures only the
+                        // user's thinking time, not the animation duration.
+                        QuestionCard(u) { vm.onQuestionShown() }
+                    }
                 }
             }
 
@@ -472,7 +478,7 @@ private fun ProgressBarRow(sessionId: Long, answered: Int, total: Int) {
 }
 
 @Composable
-fun QuestionCard(u: UiSession) {
+fun QuestionCard(u: UiSession, onShown: () -> Unit = {}) {
     val c = AppTheme.colors
     val fact = u.fact ?: return
     val shape = RoundedCornerShape(26.dp)
@@ -482,7 +488,12 @@ fun QuestionCard(u: UiSession) {
     val tint = remember(u.seq) { Animatable(0f) }
 
     // Animation: question card entrance (fade + slight upward slide)
-    LaunchedEffect(u.seq) { entrance.animateTo(1f, tween(380, easing = FastOutSlowInEasing)) }
+    // FIX #8 — after the entrance animation completes, notify the caller so the
+    // timer starts counting from this moment, not from when the question was picked.
+    LaunchedEffect(u.seq) {
+        entrance.animateTo(1f, tween(380, easing = FastOutSlowInEasing))
+        onShown()
+    }
 
     // Animation: color pulse on feedback, shake on wrong answers
     LaunchedEffect(u.seq, u.feedback) {
@@ -558,31 +569,32 @@ fun QuestionCard(u: UiSession) {
             }
         }
 
-        Box(Modifier.fillMaxWidth().height(48.dp), contentAlignment = Alignment.Center) {
+        // Result strip: answer on top (green/red), time below at half size.
+        Box(Modifier.fillMaxWidth().height(46.dp), contentAlignment = Alignment.Center) {
             when (u.feedback) {
-                Feedback.Correct -> Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    FeedbackMark(true, u.seq)
-                    Txt(
-                        fact.answer + "  " + String.format(Locale.US, "%.1f", u.lastMs / 1000.0) + "s",
-                        18, FontWeight.Bold, c.success
-                    )
-                }
-                Feedback.Wrong -> Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(10.dp)
-                ) {
-                    FeedbackMark(false, u.seq)
-                    Txt(
-                        fact.answer + "  " + String.format(Locale.US, "%.1f", u.lastMs / 1000.0) + "s",
-                        18, FontWeight.Bold, c.error
-                    )
-                }
                 Feedback.None -> {
                     if (u.hint != null) {
                         Txt(u.hint, 14, FontWeight.Medium, c.warning)
+                    }
+                }
+                else -> {
+                    val ok = u.feedback == Feedback.Correct
+                    val resultColor = if (ok) c.success else c.error
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        Row(
+                            verticalAlignment = Alignment.CenterVertically,
+                            horizontalArrangement = Arrangement.spacedBy(6.dp)
+                        ) {
+                            FeedbackMark(ok, u.seq, Modifier.size(22.dp))
+                            Txt(fact.answer, 20, FontWeight.ExtraBold, resultColor)
+                        }
+                        Txt(
+                            "Time: " + String.format(Locale.US, "%.1f", u.lastMs / 1000.0) + " sec",
+                            10, FontWeight.Medium, c.accentA
+                        )
                     }
                 }
             }
@@ -1146,21 +1158,31 @@ fun CategoryProgressSection(
             }
 
             if (sortedByCorrect.isNotEmpty()) {
-                Txt("Strengths (detailed)", 11, FontWeight.SemiBold, c.muted)
+                Txt("Strongest facts", 11, FontWeight.SemiBold, c.muted)
                 sortedByCorrect.take(5).forEach { d ->
-                    Txt("${d.key}  ✓${d.correct}  avg ${(d.avgMs / 1000.0).format1()}s",
-                        11, FontWeight.Normal, c.onBackground)
+                    FactRow(d.key, d.correct, "correct", d.avgMs, c.success)
                 }
             }
 
             if (sortedByWrong.isNotEmpty()) {
-                Txt("Weaknesses (detailed)", 11, FontWeight.SemiBold, c.muted)
+                Txt("Needs more practice", 11, FontWeight.SemiBold, c.muted)
                 sortedByWrong.take(5).forEach { d ->
-                    Txt("${d.key}  ✗${d.incorrect}  avg ${(d.avgMs / 1000.0).format1()}s",
-                        11, FontWeight.Normal, c.onBackground)
+                    FactRow(d.key, d.incorrect, "wrong", d.avgMs, c.error)
                 }
             }
         }
+    }
+}
+
+@Composable
+private fun FactRow(fact: String, count: Int, countLabel: String, avgMs: Double, color: Color) {
+    val c = AppTheme.colors
+    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+        Column(Modifier.weight(1f)) {
+            Txt(fact, 12, FontWeight.SemiBold, c.onBackground)
+            Txt("Avg. time: ${(avgMs / 1000.0).format1()} s", 10, FontWeight.Medium, c.muted)
+        }
+        Txt("$count $countLabel", 11, FontWeight.Bold, color)
     }
 }
 

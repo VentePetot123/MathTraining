@@ -218,7 +218,8 @@ fun CategoryCard(index: Int, cat: Category, s: CatSummary?, onClick: () -> Unit)
                 fontSize = 14.sp,
                 fontWeight = FontWeight.Bold,
                 maxLines = 2,
-                overflow = TextOverflow.Ellipsis
+                overflow = TextOverflow.Ellipsis,
+                lineHeight = 16.sp
             )
             val stat = if (s == null || s.attempts == 0) "Not practiced yet"
             else "${s.accuracyPct}% acc · ${s.facts} facts"
@@ -266,7 +267,9 @@ fun RangeScreen(vm: TrainerViewModel) {
             Spacer(Modifier.width(12.dp))
             Column(Modifier.weight(1f)) {
                 Txt(cat.name, 18, FontWeight.ExtraBold, Color.White)
-                Txt(cat.blurb, 11, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
+                // FIX #8 — tightened line height so multi-line blurb descriptions
+                // don't take unnecessary vertical space.
+                Txt(cat.blurb, 11, FontWeight.Normal, Color.White.copy(alpha = 0.9f), lineHeight = 13)
             }
             // Visual affordance only — the ripple and click are on the parent Row.
             Box(
@@ -295,7 +298,8 @@ fun RangeScreen(vm: TrainerViewModel) {
                     Txt(
                         "Infinite decimals (like 1/3): type 4 decimal places, e.g. 0.3333. " +
                             "Percentages: 2 decimal places, e.g. 33.33%.",
-                        12, FontWeight.Medium, c.muted
+                        12, FontWeight.Medium, c.muted,
+                        lineHeight = 15
                     )
                 }
             }
@@ -1126,8 +1130,8 @@ fun CategoryProgressSection(
 
         // FIX #8: perf — summarize() allocates strings; cache on (mastery, details).
         val (strongTxt, weakTxt) = remember(mastery, details) { summarize(mastery, details) }
-        Txt("Strengths: $strongTxt", 11, FontWeight.Medium, c.success)
-        Txt("Weaknesses: $weakTxt", 11, FontWeight.Medium, c.error)
+        Txt("Top Strength: $strongTxt", 11, FontWeight.Medium, c.success)
+        Txt("Top Weakness: $weakTxt", 11, FontWeight.Medium, c.error)
 
         // FIX #8 — `detailed` gate: charts + detailed lists are shown only when the
         // caller opts in. Progress Dashboard (grid of cards) passes detailed = false
@@ -1158,14 +1162,14 @@ fun CategoryProgressSection(
             }
 
             if (sortedByCorrect.isNotEmpty()) {
-                Txt("Strongest facts", 11, FontWeight.SemiBold, c.muted)
+                Txt("Strength list", 11, FontWeight.SemiBold, c.muted)
                 sortedByCorrect.take(5).forEach { d ->
                     FactRow(d.key, d.correct, "correct", d.avgMs, c.success)
                 }
             }
 
             if (sortedByWrong.isNotEmpty()) {
-                Txt("Needs more practice", 11, FontWeight.SemiBold, c.muted)
+                Txt("Weakness list", 11, FontWeight.SemiBold, c.muted)
                 sortedByWrong.take(5).forEach { d ->
                     FactRow(d.key, d.incorrect, "wrong", d.avgMs, c.error)
                 }
@@ -1180,7 +1184,7 @@ private fun FactRow(fact: String, count: Int, countLabel: String, avgMs: Double,
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Column(Modifier.weight(1f)) {
             Txt(fact, 12, FontWeight.SemiBold, c.onBackground)
-            Txt("Avg. time: ${(avgMs / 1000.0).format1()} s", 10, FontWeight.Medium, c.muted)
+            Txt("Avg. Time: ${(avgMs / 1000.0).format1()} s", 10, FontWeight.Medium, c.muted)
         }
         Txt("$count $countLabel", 11, FontWeight.Bold, color)
     }
@@ -1214,7 +1218,7 @@ private fun summarize(
     mastery: Triple<Int, Int, Int>,
     details: List<AdaptiveEngine.FactDetail>
 ): Pair<String, String> {
-    if (details.isEmpty()) return "no data yet" to "no data yet"
+    if (details.isEmpty()) return "No data yet" to "No data yet"
 
     // FIX #8 — partition into mutually exclusive buckets so the SAME fact can never
     // appear in both "strong on" and "weak on". This mirrors the partitioning used
@@ -1227,14 +1231,14 @@ private fun summarize(
     val worst = netNegative.maxByOrNull { it.incorrect - it.correct }?.key
 
     val strong = when {
-        best != null -> "strong on $best"
-        details.any { it.correct > 0 } -> "no clear strength yet"
-        else -> "no data yet"
+        best != null -> best
+        details.any { it.correct > 0 } -> "None yet"
+        else -> "No data yet"
     }
     val weak = when {
-        worst != null -> "weak on $worst"
-        details.any { it.incorrect > 0 } -> "no clear weakness yet"
-        else -> "no data yet"
+        worst != null -> worst
+        details.any { it.incorrect > 0 } -> "None yet"
+        else -> "No data yet"
     }
     return strong to weak
 }

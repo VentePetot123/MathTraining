@@ -140,6 +140,49 @@ private fun genPowers3(lo: Int, hi: Int): List<Fact> {
     return out
 }
 
+// FIX #8 — Integers category. Generates absolute value and comparison questions
+// that produce a non-negative integer answer (so the existing keypad can type it).
+private fun genIntegers(lo: Int, hi: Int): List<Fact> {
+    val out = ArrayList<Fact>()
+    // Ensure the range covers negative numbers, regardless of what the user picked
+    val minVal = minOf(-hi, lo)
+    val maxVal = maxOf(hi, -lo)
+
+    // 1. Absolute Value questions (|x| = ?)
+    for (i in minVal..maxVal) {
+        if (i == 0) continue
+        val absVal = kotlin.math.abs(i).toLong()
+        out.add(
+            intFact(
+                key = "|$i|",
+                prompt = "|$i| = ?",
+                ans = absVal,
+                sol = "|$i| = $absVal"
+            )
+        )
+    }
+
+    // 2. Subtraction across zero (-a - b = ?), but we force the answer to be negative.
+    // Since the keypad lacks a minus button, we ask for the magnitude instead:
+    // "What is the distance between a and b?" which is always positive.
+    for (a in minVal..maxVal) {
+        for (b in minVal..maxVal) {
+            if (a == b || (a in 1..hi && b in 1..hi)) continue // skip positive-only pairs
+            val distance = kotlin.math.abs(a - b).toLong()
+            out.add(
+                intFact(
+                    key = "dist($a,$b)",
+                    prompt = "Distance from $a to $b",
+                    ans = distance,
+                    sol = "Distance from $a to $b = $distance"
+                )
+            )
+        }
+    }
+
+    return out
+}
+
 private fun genFactorials(lo: Int, hi: Int): List<Fact> {
     val out = ArrayList<Fact>()
     for (n in lo..hi) {
@@ -231,6 +274,8 @@ object Categories {
             Color(0xFFF2994A), Color(0xFFE5A100), 1, 10, 100, false, ::genCubes),
         Category("fdp", "Fractions, Decimals, Percentages", "%", "Fraction, decimal and percentage equivalents (range = denominators)",
             Color(0xFF56AB2F), Color(0xFF2E8B57), 1, 10, 100, true, ::genFdp),
+        Category("integers", "Integers", "ℤ", "Absolute values and distances",
+            Color(0xFF00D2FF), Color(0xFF3A7BD5), 1, 10, 20, false, ::genIntegers),
         Category("powers2", "Powers of 2", "2ⁿ", "Powers of 2",
             Color(0xFFFF416C), Color(0xFFFF4B2B), 1, 10, 100, false, ::genPowers2),
         Category("powers3", "Powers of 3", "3ⁿ", "Powers of 3",

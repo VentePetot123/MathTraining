@@ -549,7 +549,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         // FIX #8 — allow up to 15 characters (covers longest reasonable decimals and
         // fractions) instead of 12. The UI box will expand up to 120dp and shrink
         // font accordingly; 15 chars is the practical limit for readability.
-        if (u.input.length >= 15) return
+        if (u.input.length >= 160) return
         ui = u.copy(input = u.input + k, hint = null)
     }
 

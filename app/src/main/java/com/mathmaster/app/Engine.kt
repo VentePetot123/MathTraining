@@ -422,15 +422,22 @@ class AdaptiveEngine(private val store: Store) {
         var totalCorrect = 0
         var totalIncorrect = 0
         var bestStreak = 0
+        var totalSessions = 0
+
         for (cat in Categories.all) {
+            // 1. Sum up the answers
             val map = stats(cat.id)
             for (s in map.values) {
                 totalCorrect += s.correct
                 totalIncorrect += s.incorrect
                 if (s.streak > bestStreak) bestStreak = s.streak
             }
+            // 2. Sum up the completed sessions for this category
+            totalSessions += history(cat.id).size
         }
-        store.setTotals(totalCorrect + totalIncorrect, store.sessions(), bestStreak)
+
+        // Update the global cache with the exact numbers derived from the saved data.
+        store.setTotals(totalCorrect + totalIncorrect, totalSessions, bestStreak)
     }
     // FIX #8: perf — snapshot per-session aggregate for the dashboard trend chart.
     @Synchronized

@@ -406,7 +406,9 @@ fun TrainingScreen(vm: TrainerViewModel) {
                 total = u.total,
                 score = u.score,
                 streak = u.streak,
-                onQuit = { vm.showQuit = true }
+                onQuit = { vm.showQuit = true },
+                soundEnabled = vm.soundEnabled,
+                onToggleSound = { vm.toggleSound() }
             )
 
             ProgressBarRow(
@@ -475,17 +477,27 @@ fun TrainingScreen(vm: TrainerViewModel) {
 // FIX #8: perf — header is its own composable with primitive params. Typing a digit
 // changes `input`, not `answered`/`score`/`streak`, so Compose skips this entirely.
 @Composable
-private fun HeaderBar(answered: Int, total: Int, score: Int, streak: Int, onQuit: () -> Unit) {
+private fun HeaderBar(
+    answered: Int,
+    total: Int,
+    score: Int,
+    streak: Int,
+    onQuit: () -> Unit,
+    // FIX #8 — sound state and toggle passed as params so HeaderBar stays a pure
+    // composable (no VM dependency). The parent TrainingScreen handles the call.
+    soundEnabled: Boolean = true,
+    onToggleSound: () -> Unit = {}
+) {
     val c = AppTheme.colors
     Row(
         Modifier.fillMaxWidth().padding(horizontal = 16.dp, vertical = 12.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
         SoftButton("✕ Quit", size = 14, onClick = onQuit)
-        Spacer(Modifier.weight(1f))
-        // FIX #8 — quick mute toggle in the header.
-        SoftButton(if (vm.soundEnabled) "🔊" else "🔇", size = 14, onClick = { vm.toggleSound() })
         Spacer(Modifier.width(8.dp))
+        // FIX #8 — mute toggle. Uses the sound icon so it's self-explanatory.
+        SoftButton(if (soundEnabled) "🔊" else "🔇", size = 14, onClick = onToggleSound)
+        Spacer(Modifier.weight(1f))
         Column(horizontalAlignment = Alignment.End) {
             Txt("Q ${minOf(answered + 1, total)}/$total", 17, FontWeight.Bold)
             Txt("Score $score · Streak $streak 🔥", 12, FontWeight.Medium, c.muted)

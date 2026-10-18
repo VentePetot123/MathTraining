@@ -562,19 +562,19 @@ fun QuestionCard(u: UiSession, onShown: () -> Unit = {}) {
             Feedback.Wrong -> c.error
             Feedback.None -> c.accentA.copy(alpha = 0.5f)
         }
-        // Answer box: text shrinks as it grows (min 12sp), wraps onto new lines, and the
-        // box grows downward. Line spacing tightens once the text needs 3+ lines.
+        
+        // Answer box: 20 digits per line (max 160 = 8 lines). Text shrinks as the answer
+        // grows, line spacing is constant, and the box grows downward.
         val len = u.input.length
         val inputSize = when {
             len <= 8 -> 30
             len <= 11 -> 24
             len <= 16 -> 20
-            len <= 24 -> 17
-            len <= 40 -> 15
-            len <= 70 -> 13
-            else -> 12
+            len <= 20 -> 18
+            len <= 40 -> 16
+            len <= 80 -> 14
+            else -> 13
         }
-        var lineCount by remember(u.seq) { mutableIntStateOf(1) }
         Box(
             Modifier
                 .fillMaxWidth()
@@ -588,13 +588,12 @@ fun QuestionCard(u: UiSession, onShown: () -> Unit = {}) {
                 Txt("?", 28, FontWeight.Bold, c.muted)
             } else {
                 Text(
-                    text = u.input,
+                    text = u.input.chunked(20).joinToString("\n"),
                     color = c.onBackground,
                     fontSize = inputSize.sp,
+                    lineHeight = (inputSize * 1.35f).sp,
                     fontWeight = FontWeight.Bold,
                     textAlign = TextAlign.Center,
-                    lineHeight = if (lineCount > 2) (inputSize * 1.1f).sp else TextUnit.Unspecified,
-                    onTextLayout = { lineCount = it.lineCount },
                     modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
                 )
             }

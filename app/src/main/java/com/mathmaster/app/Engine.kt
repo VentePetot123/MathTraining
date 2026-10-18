@@ -237,10 +237,13 @@ class Store(context: Context) {
     // FIX #8: perf — overwrite the cached totals with externally-computed values.
     // Used by AdaptiveEngine.recomputeTotalsFromStats() after a per-category reset
     // so the cache reflects "answers still stored" rather than "answers ever made."
+    // FIX #8 — persist the sound on/off state so it survives app restarts.
     fun setTotals(answers: Int, sessions: Int, best: Int) {
         cachedTotals = Triple(answers, sessions, best)
         totalsDirty = true
     }
+    fun isSoundEnabled(): Boolean = prefs.getBoolean("sound_enabled", true)
+    fun setSoundEnabled(on: Boolean) { prefs.edit().putBoolean("sound_enabled", on).apply() }
 }
 
 /** FSRS-4.5 style memory model: stability (days), difficulty (1-10), retrievability. */

@@ -233,8 +233,20 @@ fun CategoryCard(index: Int, cat: Category, s: CatSummary?, onClick: () -> Unit)
             // FIX #8 — small spacer for breathing room between title and stat.
             Spacer(Modifier.height(2.dp))
             val stat = if (s == null || s.attempts == 0) "Not practiced yet"
-            else "${s.accuracyPct}% acc · ${s.facts} facts"
-            Txt(stat, 11, FontWeight.Medium, Color.White.copy(alpha = 0.85f))
+            else "${formatAttempts(s.attempts)} attempts · ${s.accuracyPct}% accuracy"
+            
+            // FIX #8 — Future-proofing: If the text is very long (e.g., 1500 attempts),
+            // shrink the font slightly so it fits on ONE line. If it's still too long,
+            // it will ellipsize instead of wrapping and breaking the card layout.
+            val statSize = if (stat.length > 20) 10 else 11
+            Text(
+                text = stat,
+                color = Color.White.copy(alpha = 0.85f),
+                fontSize = statSize.sp,
+                fontWeight = FontWeight.Medium,
+                maxLines = 1,
+                overflow = TextOverflow.Ellipsis
+            )
         }
     }
 }
@@ -382,7 +394,7 @@ fun RangeScreen(vm: TrainerViewModel) {
 }
 
 @Composable
-private fun Text2(s: String) = Txt(s, 15, FontWeight.Normal, AppTheme.colors.onBackground)
+private fun formatAttempts(n: Int): String = if (n > 999) "999+" else n.toString()
 
 // =====================================================================
 // Training screen

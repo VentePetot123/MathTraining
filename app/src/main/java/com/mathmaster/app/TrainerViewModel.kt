@@ -623,7 +623,20 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
 
         advanceJob?.cancel()
         advanceJob = viewModelScope.launch {
-            delay(if (verdict) 900L else 1900L)
+            // FIX #8 — dynamic delay based on answer length.
+            //  • Correct: 900ms base + 40ms per character (cap at ~2.5s). Correct
+            //    answers don't need much reading time, but a very long correct
+            //    decimal/fraction should still be visible for a beat longer.
+            //  • Wrong: 1900ms base + 60ms per character (cap at ~6s). Wrong answers
+            //    need enough time to actually read the correct answer and understand
+            //    the mistake — more characters = more time.
+            val answerLen = f.answer.length
+            val delayMs = if (verdict) {
+                (900L + 40L * answerLen).coerceAtMost(2500L)
+            } else {
+                (1900L + 60L * answerLen).coerceAtMost(6000L)
+            }
+            delay(delayMs)
             // FIX #8: perf — if the user has left the Training screen (via Quit or Back)
             // while this delay was running, nextQuestion() must not proceed. It now
             // checks `screen` itself, so no state can be mutated after the user left.

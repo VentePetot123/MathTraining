@@ -1,6 +1,7 @@
 package com.mathmaster.app
 
 import androidx.compose.ui.graphics.Color
+import java.math.BigInteger
 import java.util.Locale
 import kotlin.math.abs
 import kotlin.math.min
@@ -34,23 +35,11 @@ class Category(
     val generate: (Int, Int) -> List<Fact>
 ) {
     fun presets(): List<Pair<Int, Int>> =
-        listOf(1 to 10, 1 to 20, 1 to 30).map { it.first to min(it.second, hardMax) }.distinct()
+        listOf(1 to 10, 1 to 20, 1 to 30, 1 to 50)
 }
 
 private fun intFact(key: String, prompt: String, ans: Long, sol: String) =
     Fact(key, prompt, ans.toString(), sol, Kind.INT)
-
-private fun pow(base: Long, exp: Int): Long {
-    var r = 1L
-    repeat(exp) { r *= base }
-    return r
-}
-
-private fun factorial(n: Int): Long {
-    var r = 1L
-    for (i in 2..n) r *= i
-    return r
-}
 
 private tailrec fun gcd(a: Int, b: Int): Int = if (b == 0) a else gcd(b, a % b)
 
@@ -124,12 +113,20 @@ private fun genCubes(lo: Int, hi: Int): List<Fact> {
     return out
 }
 
-// FIX #8: perf — Powers split into two categories. Each generator emits only its base,
-// so the "Powers of 2" card can't accidentally surface a 3^n fact (and vice versa).
+private fun bigFact(key: String, prompt: String, ans: BigInteger, sol: String) =
+    Fact(key, prompt, ans.toString(), sol, Kind.INT)
+
+private fun factorialBig(n: Int): BigInteger {
+    var r = BigInteger.ONE
+    for (i in 2..n) r = r.multiply(BigInteger.valueOf(i.toLong()))
+    return r
+}
+
 private fun genPowers2(lo: Int, hi: Int): List<Fact> {
     val out = ArrayList<Fact>()
     for (e in lo..hi) {
-        out.add(intFact("2^$e", "2^$e = ?", pow(2, e), "2^$e = ${pow(2, e)}"))
+        val v = BigInteger.valueOf(2).pow(e)
+        out.add(bigFact("2^$e", "2^$e = ?", v, "2^$e = $v"))
     }
     return out
 }
@@ -137,7 +134,8 @@ private fun genPowers2(lo: Int, hi: Int): List<Fact> {
 private fun genPowers3(lo: Int, hi: Int): List<Fact> {
     val out = ArrayList<Fact>()
     for (e in lo..hi) {
-        out.add(intFact("3^$e", "3^$e = ?", pow(3, e), "3^$e = ${pow(3, e)}"))
+        val v = BigInteger.valueOf(3).pow(e)
+        out.add(bigFact("3^$e", "3^$e = ?", v, "3^$e = $v"))
     }
     return out
 }
@@ -145,10 +143,11 @@ private fun genPowers3(lo: Int, hi: Int): List<Fact> {
 private fun genFactorials(lo: Int, hi: Int): List<Fact> {
     val out = ArrayList<Fact>()
     for (n in lo..hi) {
-        val v = factorial(n)
-        out.add(intFact("${n}!", "${n}! = ?", v, "${n}! = $v"))
-        if (n >= 3) {
-            out.add(intFact("n! = $v", "n! = $v  →  n = ?", n.toLong(), "${n}! = $v"))
+        val v = factorialBig(n)
+        out.add(bigFact("${n}!", "${n}! = ?", v, "${n}! = $v"))
+        // "find n from n!" stays up to 20!, because a 100-digit prompt can't be read on screen.
+        if (n in 3..20) {
+            out.add(bigFact("n! = $v", "n! = $v  →  n = ?", BigInteger.valueOf(n.toLong()), "${n}! = $v"))
         }
     }
     return out
@@ -219,25 +218,25 @@ private fun genFdp(lo0: Int, hi0: Int): List<Fact> {
 object Categories {
     val all: List<Category> = listOf(
         Category("addition", "Addition", "＋", "Master addition facts",
-            Color(0xFF00B4DB), Color(0xFF0083B0), 1, 10, 99, false, ::genAdd),
+            Color(0xFF00B4DB), Color(0xFF0083B0), 1, 10, 100, false, ::genAdd),
         Category("subtraction", "Subtraction", "−", "Master subtraction facts",
-            Color(0xFF7F7FD5), Color(0xFF86A8E7), 1, 10, 99, false, ::genSub),
+            Color(0xFF7F7FD5), Color(0xFF86A8E7), 1, 10, 100, false, ::genSub),
         Category("multiplication", "Multiplication", "×", "Master multiplication tables",
-            Color(0xFF4776E6), Color(0xFF8E54E9), 1, 10, 99, false, ::genMul),
+            Color(0xFF4776E6), Color(0xFF8E54E9), 1, 10, 100, false, ::genMul),
         Category("division", "Division", "÷", "Master division facts",
-            Color(0xFF11998E), Color(0xFF38C172), 1, 10, 99, false, ::genDiv),
+            Color(0xFF11998E), Color(0xFF38C172), 1, 10, 100, false, ::genDiv),
         Category("squares", "Squares & Roots", "x²", "Perfect squares and square roots",
-            Color(0xFF8E2DE2), Color(0xFF4A00E0), 1, 20, 99, false, ::genSquares),
+            Color(0xFF8E2DE2), Color(0xFF4A00E0), 1, 10, 100, false, ::genSquares),
         Category("cubes", "Cubes & Roots", "x³", "Perfect cubes and cube roots",
-            Color(0xFFF2994A), Color(0xFFE5A100), 1, 10, 99, false, ::genCubes),
+            Color(0xFFF2994A), Color(0xFFE5A100), 1, 10, 100, false, ::genCubes),
         Category("fdp", "Fractions, Decimals, Percentages", "%", "Fraction, decimal and percentage equivalents (range = denominators)",
-            Color(0xFF56AB2F), Color(0xFF2E8B57), 1, 8, 30, true, ::genFdp),
+            Color(0xFF56AB2F), Color(0xFF2E8B57), 1, 10, 100, true, ::genFdp),
         Category("powers2", "Powers of 2", "2ⁿ", "Powers of 2",
-            Color(0xFFFF416C), Color(0xFFFF4B2B), 1, 10, 30, false, ::genPowers2),
+            Color(0xFFFF416C), Color(0xFFFF4B2B), 1, 10, 100, false, ::genPowers2),
         Category("powers3", "Powers of 3", "3ⁿ", "Powers of 3",
-            Color(0xFFEB5757), Color(0xFFC0392B), 1, 10, 30, false, ::genPowers3),
+            Color(0xFFEB5757), Color(0xFFC0392B), 1, 10, 100, false, ::genPowers3),
         Category("factorials", "Factorials", "n!", "Factorial values and finding n from n!",
-            Color(0xFFFF8008), Color(0xFFE5532D), 1, 10, 20, false, ::genFactorials)
+            Color(0xFFFF8008), Color(0xFFE5532D), 1, 10, 100, false, ::genFactorials)
     )
 
     fun byId(id: String): Category = all.first { it.id == id }
@@ -249,7 +248,7 @@ object Grading {
         val t = raw.trim().replace(",", "").replace(" ", "")
         if (t.isEmpty()) return null
         return when (f.kind) {
-            Kind.INT -> t.toLongOrNull()?.let { it == f.answer.toLong() }
+            Kind.INT -> (t.toBigIntegerOrNull()?.toString() == f.answer)
             Kind.PCT -> t.trimEnd('%').toDoubleOrNull()
                 ?.let { abs(it - f.answer.trimEnd('%').toDouble()) <= 0.05 }
             Kind.DEC -> t.toDoubleOrNull()?.let { user ->

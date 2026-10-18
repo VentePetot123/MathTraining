@@ -555,7 +555,15 @@ fun QuestionCard(u: UiSession, onShown: () -> Unit = {}) {
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
 
-        Txt(fact.prompt, promptSize, FontWeight.ExtraBold, c.onBackground, Modifier.fillMaxWidth(), TextAlign.Center)
+        Text(
+            text = fact.prompt,
+            color = c.onBackground,
+            fontSize = promptSize.sp,
+            fontWeight = FontWeight.ExtraBold,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth(),
+            lineHeight = (promptSize * 1.1f).sp
+        )
 
         val borderColor = when (u.feedback) {
             Feedback.Correct -> c.success

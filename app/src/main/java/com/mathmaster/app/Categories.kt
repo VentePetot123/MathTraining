@@ -140,46 +140,48 @@ private fun genPowers3(lo: Int, hi: Int): List<Fact> {
     return out
 }
 
-// FIX #8 — Integers category. Generates absolute value and comparison questions
-// that produce a non-negative integer answer (so the existing keypad can type it).
+// FIX #8 — Integers category. Generates mixed operation questions (+,-,*,/)
+// using negative numbers. The range parameter (lo..hi) determines the magnitude
+// of the numbers involved.
 private fun genIntegers(lo: Int, hi: Int): List<Fact> {
     val out = ArrayList<Fact>()
-    // Ensure the range covers negative numbers, regardless of what the user picked
-    val minVal = minOf(-hi, lo)
-    val maxVal = maxOf(hi, -lo)
+    // Use the positive range requested (e.g., 1..10), but generate negatives too
+    val h = maxOf(1, hi)
+    val l = maxOf(1, minOf(lo, h))
+    
+    // Define how many positive numbers per range to use for multiplying/dividing
+    // to keep the questions reasonable (e.g., multiplication stays under ~50)
+    val mulMax = minOf(h, 10)
+    
+    for (a in l..h) for (b in l..h) {
+        // Addition
+        out.add(intFact("$a + $b", "$a + $b = ?", (a + b).toLong(), "$a + $b = ${a + b}"))
+        out.add(intFact("$a + (-$b)", "$a + (−$b) = ?", (a - b).toLong(), "$a + (−$b) = ${a - b}"))
+        out.add(intFact("(-$a) + $b", "(−$a) + $b = ?", (b - a).toLong(), "(−$a) + $b = ${b - a}"))
+        out.add(intFact("(-$a) + (-$b)", "(−$a) + (−$b) = ?", (-a - b).toLong(), "(−$a) + (−$b) = ${-a - b}"))
 
-    // 1. Absolute Value questions (|x| = ?)
-    for (i in minVal..maxVal) {
-        if (i == 0) continue
-        val absVal = kotlin.math.abs(i).toLong()
-        out.add(
-            intFact(
-                key = "|$i|",
-                prompt = "|$i| = ?",
-                ans = absVal,
-                sol = "|$i| = $absVal"
-            )
-        )
+        // Subtraction
+        out.add(intFact("$a - $b", "$a − $b = ?", (a - b).toLong(), "$a − $b = ${a - b}"))
+        out.add(intFact("$a - (-$b)", "$a − (−$b) = ?", (a + b).toLong(), "$a − (−$b) = ${a + b}"))
+        out.add(intFact("(-$a) - $b", "(−$a) − $b = ?", (-a - b).toLong(), "(−$a) − $b = ${-a - b}"))
+        out.add(intFact("(-$a) - (-$b)", "(−$a) − (−$b) = ?", (b - a).toLong(), "(−$a) − (−$b) = ${b - a}"))
     }
 
-    // 2. Subtraction across zero (-a - b = ?), but we force the answer to be negative.
-    // Since the keypad lacks a minus button, we ask for the magnitude instead:
-    // "What is the distance between a and b?" which is always positive.
-    for (a in minVal..maxVal) {
-        for (b in minVal..maxVal) {
-            if (a == b || (a in 1..hi && b in 1..hi)) continue // skip positive-only pairs
-            val distance = kotlin.math.abs(a - b).toLong()
-            out.add(
-                intFact(
-                    key = "dist($a,$b)",
-                    prompt = "Distance from $a to $b",
-                    ans = distance,
-                    sol = "Distance from $a to $b = $distance"
-                )
-            )
-        }
-    }
+    // Multiplication / Division use a tighter range so numbers don't explode
+    for (a in l..mulMax) for (b in l..mulMax) {
+        // Multiplication
+        out.add(intFact("$a × $b", "$a × $b = ?", (a * b).toLong(), "$a × $b = ${a * b}"))
+        out.add(intFact("(-$a) × $b", "(−$a) × $b = ?", (-a * b).toLong(), "(−$a) × $b = ${-a * b}"))
+        out.add(intFact("$a × (-$b)", "$a × (−$b) = ?", (-a * b).toLong(), "$a × (−$b) = ${-a * b}"))
+        out.add(intFact("(-$a) × (-$b)", "(−$a) × (−$b) = ?", (a * b).toLong(), "(−$a) × (−$b) = ${a * b}"))
 
+        // Division (exact only)
+        val ab = a * b
+        out.add(intFact("$ab ÷ $b", "$ab ÷ $b = ?", a.toLong(), "$ab ÷ $b = $a"))
+        out.add(intFact("(-$ab) ÷ $b", "(−$ab) ÷ $b = ?", (-a).toLong(), "(−$ab) ÷ $b = ${-a}"))
+        out.add(intFact("$ab ÷ (-$b)", "$ab ÷ (−$b) = ?", (-a).toLong(), "$ab ÷ (−$b) = ${-a}"))
+        out.add(intFact("(-$ab) ÷ (-$b)", "(−$ab) ÷ (−$b) = ?", a.toLong(), "(−$ab) ÷ (−$b) = $a"))
+    }
     return out
 }
 

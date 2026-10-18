@@ -1044,21 +1044,7 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
                 Txt(cat.name, 18, FontWeight.ExtraBold, Color.White)
                 Txt("Detailed progress", 11, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
             }
-            // FIX #8 — same 2dp top-padding compensation for the glyph baseline so
-            // the chevron is perfectly centered in its 44dp box.
-            Box(
-                Modifier.size(44.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Txt(
-                    "‹",
-                    34,
-                    FontWeight.Bold,
-                    Color.White,
-                    align = TextAlign.Center,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
-            }
+            BackChevron()
         }
 
         // FIX #8 — mastery card first, actions at the bottom. This mirrors the dashboard:
@@ -1157,22 +1143,7 @@ fun ProgressHeader(title: String, subtitle: String, onBack: () -> Unit) {
             Txt(title, 22, FontWeight.ExtraBold, Color.White)
             Txt(subtitle, 13, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
         }
-        // FIX #8 — the glyph "‹" has asymmetric ascender/descender space, so a plain
-        // Txt looks slightly off-center. Wrapping in a Box with contentAlignment =
-        // Center forces the glyph to be visually centered inside the 44dp box.
-        Box(
-            Modifier.size(44.dp),
-            contentAlignment = Alignment.Center
-        ) {
-            Txt(
-                "‹",
-                34,
-                FontWeight.Bold,
-                Color.White,
-                align = TextAlign.Center,
-                modifier = Modifier.padding(top = 2.dp) // compensate for glyph baseline
-            )
-        }
+        BackChevron()
     }
 }
 

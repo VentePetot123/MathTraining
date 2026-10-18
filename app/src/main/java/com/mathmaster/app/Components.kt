@@ -80,11 +80,15 @@ fun Txt(
     weight: FontWeight = FontWeight.Normal,
     color: Color = AppTheme.colors.onBackground,
     modifier: Modifier = Modifier,
-    align: TextAlign = TextAlign.Start
+    align: TextAlign = TextAlign.Start,
+    // FIX #8 — optional lineHeight. Pass a value slightly larger than `size` to
+    // tighten multi-line text (default Compose spacing is ~1.4x, which looks airy).
+    lineHeight: Int? = null
 ) {
     Text(
         text = text, modifier = modifier, color = color,
-        fontSize = size.sp, fontWeight = weight, textAlign = align
+        fontSize = size.sp, fontWeight = weight, textAlign = align,
+        lineHeight = (lineHeight ?: (size * 1.4f).toInt()).sp
     )
 }
 

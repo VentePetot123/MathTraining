@@ -569,6 +569,23 @@ fun SoundToggle(enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modi
     }
 }
 
+// Back arrow drawn in code so it is exactly centered in its 44dp box on every device.
+@Composable
+fun BackChevron(modifier: Modifier = Modifier, color: Color = Color.White) {
+    Canvas(modifier.size(44.dp).padding(13.dp)) {
+        val w = size.width
+        val path = Path().apply {
+            moveTo(w * 0.68f, w * 0.06f)
+            lineTo(w * 0.28f, w * 0.50f)
+            lineTo(w * 0.68f, w * 0.94f)
+        }
+        drawPath(
+            path, color,
+            style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+        )
+    }
+}
+
 @Composable
 fun RoundButton(text: String, onClick: () -> Unit) {
     Box(

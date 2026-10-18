@@ -369,12 +369,12 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         // FIX #8: perf — hard cap at 99 regardless of category hardMax. The number-entry
         // dialog already enforces this, but the guard here prevents any other caller
         // from setting an out-of-range value.
-        rangeMin = v.coerceIn(1, minOf(99, selected.hardMax))
+        rangeMin = v.coerceIn(1, selected.hardMax)
         if (rangeMax < rangeMin) rangeMax = rangeMin
     }
 
     fun setMax(v: Int) {
-        rangeMax = v.coerceIn(1, minOf(99, selected.hardMax))
+        rangeMax = v.coerceIn(1, selected.hardMax)
         if (rangeMin > rangeMax) rangeMin = rangeMax
     }
 

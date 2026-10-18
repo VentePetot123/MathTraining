@@ -305,8 +305,12 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
                     openProgress()
                 }
             }
-            // FIX #8 — Range backs to Menu (standard parent navigation).
-            Screen.Range, Screen.Results, Screen.Progress -> toMenu()
+            // FIX #8 — Results backs to Range (the category settings screen) rather than
+            // the main Menu. This mirrors the "Back to Category" button and matches the
+            // user's mental model: after finishing a session, going back means returning
+            // to the setup screen for the same category.
+            Screen.Results -> openCategory(selected)
+            Screen.Range, Screen.Progress -> toMenu()
             else -> Unit
         }
     }
@@ -512,9 +516,24 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
             return
         }
         val f = engine.pick(u.categoryId, rt, u.answered)
-        rt.startedAt = SystemClock.elapsedRealtime()
+        // FIX #8 — timer starts only after the question card animation finishes.
+        // The old code set `startedAt` here, which meant the user was penalised
+        // for the 380ms entrance animation. Instead, we reset the timer to 0 and
+        // let the UI signal back when it's ready (see `onQuestionShown`).
+        rt.startedAt = 0L
         ui = u.copy(fact = f, input = "", feedback = Feedback.None, hint = null, seq = u.seq + 1)
     }
+
+    // FIX #8 — called by the UI once the entrance animation completes. Starts the
+    // session clock for this question, so the user is only timed for their actual
+    // response time, not the card animation.
+    fun onQuestionShown() {
+        val rt = runtime ?: return
+        if (rt.startedAt == 0L) {
+            rt.startedAt = SystemClock.elapsedRealtime()
+        }
+    }
+
 
     // FIX #8: perf — these methods only touch `u.input`. Because `UiSession` is a
     // data class with copy(), the whole `ui` value changes; but Compose's snapshot
@@ -559,7 +578,10 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
             ui = u.copy(input = "", hint = "Check the answer format")
             return
         }
-        val ms = SystemClock.elapsedRealtime() - rt.startedAt
+        // FIX #8 — guard against a zero timer (user submits before animation done).
+        // If startedAt is still 0, treat elapsed as 0 (best-effort; the answer is
+        // still graded, just not timed).
+        val ms = if (rt.startedAt == 0L) 0L else SystemClock.elapsedRealtime() - rt.startedAt
         rt.totalMs += ms
         rt.answerCount++
         // FIX #8: perf — move stats write + adaptive recalculation off the main thread.

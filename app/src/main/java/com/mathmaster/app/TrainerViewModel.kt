@@ -91,11 +91,15 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     var totals by mutableStateOf(Totals(0, 0, 0))
         private set
     var showQuit by mutableStateOf(false)
-    // FIX #8 — sound on/off toggle. Persisted so it survives app restarts (optional —
-    // currently in-memory only; see note below).
-    var soundEnabled by mutableStateOf(true)
+    // FIX #8 — sound on/off toggle. Initial value loaded from persistent prefs so
+    // the user's mute choice survives app restarts.
+    var soundEnabled by mutableStateOf(store.isSoundEnabled())
         private set
-    fun toggleSound() { soundEnabled = !soundEnabled }
+    fun toggleSound() {
+        soundEnabled = !soundEnabled
+        if (soundEnabled) soundManager.playCorrect()   // confirmation ding on unmute
+        store.setSoundEnabled(soundEnabled)
+    }
 
     // FIX #8: perf — countdown gate for a new session. While non-null, the training
     // screen renders a scrim + "Ready/Set/Solve!" and no question is shown yet.
@@ -562,6 +566,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         // fractions) instead of 12. The UI box will expand up to 120dp and shrink
         // font accordingly; 15 chars is the practical limit for readability.
         if (u.input.length >= 160) return
+        if (k == "-" && u.input.isNotEmpty()) return
         ui = u.copy(input = u.input + k, hint = null)
     }
 
@@ -675,8 +680,8 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         // start). This means abandoning a session mid-way via Quit/Back does not
         // count as a completed session. Persist everything on IO; navigation happens
         // via navigateTo below.
+        store.bumpSessions()
         viewModelScope.launch(Dispatchers.IO) {
-            store.bumpSessions()
             engine.recordSession(cat, score, total, avgMs)
             engine.flush()
             val fresh = buildDashboard()

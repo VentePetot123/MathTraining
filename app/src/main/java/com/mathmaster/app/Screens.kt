@@ -165,13 +165,12 @@ fun MenuScreen(vm: TrainerViewModel) {
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
         item(span = { GridItemSpan(maxLineSpan) }) { MenuHeader(vm) { vm.openProgress() } }
-        itemsIndexed(
-            Categories.all,
-            span = { index, _ ->
-                if (index == Categories.all.lastIndex && Categories.all.size % 2 == 1)
-                    GridItemSpan(maxLineSpan) else GridItemSpan(1)
-            }
-        ) { index, cat ->
+        // FIX #8 — reverted the "full-width last card" experiment. With an odd number
+        // of categories (11), the last card would span 2 columns and become a wide
+        // rectangle. Letting it stay in its normal single-column slot keeps every
+        // card the same square shape — the small gap on the right of the last row is
+        // a standard grid behavior and looks fine.
+        itemsIndexed(Categories.all) { index, cat ->
             CategoryCard(index, cat, vm.menuStats[cat.id]) { vm.openCategory(cat) }
         }
     }
@@ -299,19 +298,7 @@ fun RangeScreen(vm: TrainerViewModel) {
             }
             // FIX #8 — same offset-compensation as ProgressHeader so the glyph is
             // vertically centered in the box.
-            Box(
-                Modifier.size(44.dp),
-                contentAlignment = Alignment.Center
-            ) {
-                Txt(
-                    "‹",
-                    34,
-                    FontWeight.Bold,
-                    Color.White,
-                    align = TextAlign.Center,
-                    modifier = Modifier.padding(top = 2.dp)
-                )
-            }
+            BackChevron()
         }
 
         // Rounding rule — shown first so it can't be missed (Fractions/Decimals/% only)

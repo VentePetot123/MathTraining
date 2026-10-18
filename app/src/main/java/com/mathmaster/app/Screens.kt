@@ -43,12 +43,14 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableFloatStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.blur
@@ -421,7 +423,7 @@ fun TrainingScreen(vm: TrainerViewModel) {
                     .padding(16.dp)
             ) {
                 Column(
-                    Modifier.align(Alignment.Center).verticalScroll(rememberScrollState())
+                    Modifier.align(Alignment.TopCenter).padding(top = 8.dp).verticalScroll(rememberScrollState())
                 ) {
                     // FIX #8: perf — the question card re-renders only when its own
                     // fields change. The keypad's `enabled` value is passed in as a
@@ -560,21 +562,23 @@ fun QuestionCard(u: UiSession, onShown: () -> Unit = {}) {
             Feedback.Wrong -> c.error
             Feedback.None -> c.accentA.copy(alpha = 0.5f)
         }
-        // FIX #8 — the input box needs to grow vertically for long inputs, but stay
-        // bounded (max 120dp) so it can't crash into the keypad. Text size also
-        // shrinks as input length grows: 30sp for ≤8 chars, down to 12sp at 30+ chars.
+        // Answer box: text shrinks as it grows (min 12sp), wraps onto new lines, and the
+        // box grows downward. Line spacing tightens once the text needs 3+ lines.
+        val len = u.input.length
         val inputSize = when {
-            u.input.length <= 8 -> 30
-            u.input.length <= 11 -> 24
-            u.input.length <= 16 -> 20
-            u.input.length <= 22 -> 16
-            u.input.length <= 30 -> 13
-            else -> 11
+            len <= 8 -> 30
+            len <= 11 -> 24
+            len <= 16 -> 20
+            len <= 24 -> 17
+            len <= 40 -> 15
+            len <= 70 -> 13
+            else -> 12
         }
+        var lineCount by remember(u.seq) { mutableIntStateOf(1) }
         Box(
             Modifier
                 .fillMaxWidth()
-                .heightIn(min = 64.dp, max = 120.dp)
+                .heightIn(min = 64.dp)
                 .clip(RoundedCornerShape(16.dp))
                 .background(c.surfaceAlt)
                 .border(2.dp, borderColor, RoundedCornerShape(16.dp)),
@@ -583,10 +587,15 @@ fun QuestionCard(u: UiSession, onShown: () -> Unit = {}) {
             if (u.input.isEmpty()) {
                 Txt("?", 28, FontWeight.Bold, c.muted)
             } else {
-                Txt(
-                    u.input, inputSize, FontWeight.Bold, c.onBackground,
-                    Modifier.padding(horizontal = 12.dp, vertical = 8.dp),
-                    TextAlign.Center
+                Text(
+                    text = u.input,
+                    color = c.onBackground,
+                    fontSize = inputSize.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center,
+                    lineHeight = if (lineCount > 2) (inputSize * 1.1f).sp else TextUnit.Unspecified,
+                    onTextLayout = { lineCount = it.lineCount },
+                    modifier = Modifier.fillMaxWidth().padding(horizontal = 12.dp, vertical = 8.dp)
                 )
             }
         }

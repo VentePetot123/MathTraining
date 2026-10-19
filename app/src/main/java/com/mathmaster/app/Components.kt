@@ -825,6 +825,15 @@ fun FlashcardBackdrop(catId: String, modifier: Modifier = Modifier) {
     val texts = remember(catId) { flashTexts(catId) }
     BoxWithConstraints(modifier) {
         FLASH_TILES.forEachIndexed { i, t ->
+            // FIX #8 — horizontal fade. Tiles on the right (x = 1.0) are fully
+            // visible. Tiles on the left (x = 0.0) are invisible. This keeps the
+            // category name (left-aligned) perfectly readable while letting the
+            // flashcards shine on the right side.
+            //
+            // We square the x value so the fade is more aggressive on the left —
+            // a linear ramp still shows too much on the far-left tiles.
+            val fade = (t.x * t.x).coerceIn(0f, 1f)
+
             val shape = RoundedCornerShape(8.dp)
             Box(
                 Modifier
@@ -832,13 +841,15 @@ fun FlashcardBackdrop(catId: String, modifier: Modifier = Modifier) {
                     .size(t.w.dp, t.h.dp)
                     .rotate(t.rot)
                     .clip(shape)
-                    .background(Color.White.copy(alpha = 0.12f))
-                    .border(1.dp, Color.White.copy(alpha = 0.22f), shape),
+                    // Apply the fade to the tile fill and border
+                    .background(Color.White.copy(alpha = 0.12f * fade))
+                    .border(1.dp, Color.White.copy(alpha = 0.22f * fade), shape),
                 contentAlignment = Alignment.Center
             ) {
                 Text(
                     text = texts[i % texts.size],
-                    color = Color.White.copy(alpha = 0.42f),
+                    // Apply the fade to the text too
+                    color = Color.White.copy(alpha = 0.42f * fade),
                     fontSize = 17.sp,
                     lineHeight = 19.sp,
                     fontWeight = FontWeight.Bold,

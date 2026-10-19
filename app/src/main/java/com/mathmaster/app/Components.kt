@@ -65,6 +65,8 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.geometry.CornerRadius
+import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
@@ -820,45 +822,92 @@ private fun flashTexts(catId: String): List<String> = when (catId) {
     else -> listOf("?", "1", "2", "3", "4", "5", "6", "7", "8")
 }
 
+// FIX #8 — flashcard backdrop drawn as a single Canvas instead of 9 nested Box
+// composables. This removes 9 measure passes + 9 recomposition nodes per card,
+// which was the primary source of scroll jank on the menu's LazyVerticalGrid.
+//
+// The tiles are drawn in a single pass using Canvas.drawRoundRect + drawText.
+// Text rendering uses Compose's nativeTextCanvas (Android Paint), which is
+// fast because it doesn't allocate Compose layout nodes.
 @Composable
 fun FlashcardBackdrop(catId: String, modifier: Modifier = Modifier) {
     val texts = remember(catId) { flashTexts(catId) }
-    BoxWithConstraints(modifier) {
-        FLASH_TILES.forEachIndexed { i, t ->
-            // FIX #8 — horizontal fade. Tiles on the right (x = 1.0) are fully
-            // visible. Tiles on the left (x = 0.0) are invisible. This keeps the
-            // category name (left-aligned) perfectly readable while letting the
-            // flashcards shine on the right side.
-            //
-            // We square the x value so the fade is more aggressive on the left —
-            // a linear ramp still shows too much on the far-left tiles.
-            val fade = (t.x * t.x).coerceIn(0f, 1f)
+    // Pre-compute everything that doesn't depend on measured size. This runs once
+    // per category, not once per scroll frame.
+    val tileData = remember(texts) {
+        FLASH_TILES.mapIndexed { i, t ->
+            TileDraw(
+                x = t.x, y = t.y, rot = t.rot, w = t.w, h = t.h,
+                fade = (t.x * t.x).coerceIn(0f, 1f),
+                text = texts[i % texts.size]
+            )
+        }
+    }
+    val paint = remember {
+        android.graphics.Paint().apply {
+            isAntiAlias = true
+            textAlign = android.graphics.Paint.Align.CENTER
+            typeface = android.graphics.Typeface.DEFAULT_BOLD
+        }
+    }
 
-            val shape = RoundedCornerShape(8.dp)
-            Box(
-                Modifier
-                    .offset(x = maxWidth * t.x - (t.w / 2).dp, y = maxHeight * t.y - (t.h / 2).dp)
-                    .size(t.w.dp, t.h.dp)
-                    .rotate(t.rot)
-                    .clip(shape)
-                    // Apply the fade to the tile fill and border
-                    .background(Color.White.copy(alpha = 0.12f * fade))
-                    .border(1.dp, Color.White.copy(alpha = 0.22f * fade), shape),
-                contentAlignment = Alignment.Center
-            ) {
-                Text(
-                    text = texts[i % texts.size],
-                    // Apply the fade to the text too
-                    color = Color.White.copy(alpha = 0.42f * fade),
-                    fontSize = 17.sp,
-                    lineHeight = 19.sp,
-                    fontWeight = FontWeight.Bold,
-                    textAlign = TextAlign.Center
+    Canvas(modifier) {
+        val w = size.width
+        val h = size.height
+        val density = this.density
+        paint.textSize = 17.sp.toPx()
+
+        tileData.forEach { td ->
+            val tileW = td.w * density
+            val tileH = td.h * density
+            val cx = w * td.x
+            val cy = h * td.y
+
+            rotate(td.rot, pivot = Offset(cx, cy)) {
+                val left = cx - tileW / 2f
+                val top = cy - tileH / 2f
+                val radius = 8.dp.toPx()
+
+                // Fill
+                drawRoundRect(
+                    color = Color.White.copy(alpha = 0.12f * td.fade),
+                    topLeft = Offset(left, top),
+                    size = Size(tileW, tileH),
+                    cornerRadius = CornerRadius(radius, radius)
                 )
+                // Border
+                drawRoundRect(
+                    color = Color.White.copy(alpha = 0.22f * td.fade),
+                    topLeft = Offset(left, top),
+                    size = Size(tileW, tileH),
+                    cornerRadius = CornerRadius(radius, radius),
+                    style = Stroke(width = 1.dp.toPx())
+                )
+                // Text — via Android native canvas (no Compose layout node)
+                paint.color = android.graphics.Color.argb(
+                    (0.42f * td.fade * 255).toInt(), 255, 255, 255
+                )
+                val lines = td.text.split('\n')
+                val lineH = paint.textSize * 1.1f
+                val totalTextH = lineH * lines.size
+                lines.forEachIndexed { lineIdx, line ->
+                    drawContext.canvas.nativeCanvas.drawText(
+                        line,
+                        cx,
+                        cy - totalTextH / 2f + lineH * (lineIdx + 1) - lineH * 0.3f,
+                        paint
+                    )
+                }
             }
         }
     }
 }
+
+// Data class used only inside FlashcardBackdrop to pre-compute draw data.
+private data class TileDraw(
+    val x: Float, val y: Float, val rot: Float, val w: Int, val h: Int,
+    val fade: Float, val text: String
+)
 
 // Small rising-bars icon for the Progress Dashboard card, drawn in code.
 @Composable

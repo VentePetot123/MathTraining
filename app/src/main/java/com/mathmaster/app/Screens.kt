@@ -163,15 +163,15 @@ fun MenuScreen(vm: TrainerViewModel) {
     ) {
         item(key = "title", span = { GridItemSpan(maxLineSpan) }) { MenuTitle() }
         item(key = "progress", span = { GridItemSpan(maxLineSpan) }) { MenuHeader(vm) { vm.openProgress() } }
-        item(key = "separator", span = { GridItemSpan(maxLineSpan) }) { MenuSeparator("Categories") }
         item(key = "welcome", span = { GridItemSpan(maxLineSpan) }) { WelcomeMessage() }
-        itemsIndexed(
-            Categories.all,
-            span = { index, _ ->
-                if (index == Categories.all.lastIndex && Categories.all.size % 2 == 1)
-                    GridItemSpan(maxLineSpan) else GridItemSpan(1)
-            }
-        ) { index, cat ->
+        // FIX #8 — separator now sits BELOW the welcome message, acting as a divider
+        // between the intro and the actual category grid.
+        item(key = "separator", span = { GridItemSpan(maxLineSpan) }) { MenuSeparator("Categories") }
+        // FIX #8 — Removed the `span` logic that forced the last odd category to span
+        // both columns. That turned the Factorials card into a wide rectangle. Letting
+        // it stay in its normal single-column slot keeps every card the same square
+        // shape. The small gap on the right of the last row is standard grid behavior.
+        itemsIndexed(Categories.all) { index, cat ->
             CategoryCard(index, cat, vm.menuStats[cat.id]) { vm.openCategory(cat) }
         }
     }
@@ -180,12 +180,16 @@ fun MenuScreen(vm: TrainerViewModel) {
 @Composable
 fun MenuTitle() {
     val c = AppTheme.colors
+    // FIX #8 — center the logo and title together. Uses Row(Center) to horizontally
+    // center the logo+column group, then the Column itself is left-aligned so the
+    // tagline reads cleanly under the title.
     Row(
         Modifier.fillMaxWidth().padding(top = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.spacedBy(12.dp)
+        horizontalArrangement = Arrangement.Center
     ) {
         LogoMark(46.dp)
+        Spacer(Modifier.width(12.dp))
         Column {
             Txt("Math Master", 28, FontWeight.ExtraBold, c.onBackground, lineHeight = 30)
             Txt("Train your mind. Adaptively.", 12, FontWeight.Medium, c.muted)
@@ -197,10 +201,13 @@ fun MenuTitle() {
 fun WelcomeMessage() {
     val c = AppTheme.colors
     val hour = remember { java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY) }
+    // FIX #8 — Capitalize the greeting word (Good Morning / Good Afternoon /
+    // Good Evening) so it reads as a proper title. Removed "today" from the
+    // welcome line per the request.
     val greeting = when (hour) {
-        in 5..11 -> "Good morning"
-        in 12..17 -> "Good afternoon"
-        else -> "Good evening"
+        in 5..11 -> "Good Morning"
+        in 12..17 -> "Good Afternoon"
+        else -> "Good Evening"
     }
     Column(
         Modifier.fillMaxWidth(),
@@ -208,7 +215,7 @@ fun WelcomeMessage() {
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         Txt("$greeting!", 20, FontWeight.ExtraBold, c.onBackground, align = TextAlign.Center)
-        Txt("Welcome to your training today", 14, FontWeight.SemiBold, c.accentA, align = TextAlign.Center)
+        Txt("Welcome to your training", 14, FontWeight.SemiBold, c.accentA, align = TextAlign.Center)
         Txt("Pick a category and let's sharpen your mind.", 12, FontWeight.Medium, c.muted, align = TextAlign.Center)
     }
 }
@@ -434,6 +441,56 @@ fun RangeScreen(vm: TrainerViewModel) {
 
 @Composable
 private fun formatAttempts(n: Int): String = if (n > 999) "999+" else n.toString()
+
+// FIX #8 — collapsible "To Review" section for the Results screen. Mirrors the
+// visual language of the Strength/Weakness tables: a SectionTitle with lines on
+// each side, a bordered card of the first 3 mistakes, and an expand chevron below
+// (only shown when there are more than 3). Expanding shows every mistake — no cap.
+@Composable
+private fun ReviewSection(missed: List<String>) {
+    val c = AppTheme.colors
+    var expanded by remember { mutableStateOf(false) }
+    val shown = if (expanded) missed else missed.take(3)
+    val line = Color.White.copy(alpha = 0.14f)
+
+    AppCard {
+        SectionTitle("To Review")
+
+        if (missed.isEmpty()) {
+            Txt("No mistakes this session. Great work!", 14, FontWeight.Medium, c.success,
+                Modifier.fillMaxWidth(), TextAlign.Center)
+        } else {
+            Column(
+                Modifier
+                    .fillMaxWidth()
+                    .clip(RoundedCornerShape(12.dp))
+                    .border(1.dp, line, RoundedCornerShape(12.dp))
+            ) {
+                shown.forEachIndexed { i, m ->
+                    if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(line))
+                    Box(
+                        Modifier
+                            .fillMaxWidth()
+                            .background(c.error.copy(alpha = 0.06f))
+                            .padding(horizontal = 14.dp, vertical = 10.dp)
+                    ) {
+                        Txt(m, 15, FontWeight.Medium, c.error, Modifier.fillMaxWidth(), TextAlign.Center)
+                    }
+                }
+            }
+
+            // FIX #8 — chevron appears only when there are more than 3 items. With
+            // ≤3 items, everything is already visible so there's nothing to expand.
+            if (missed.size > 3) {
+                Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                    ExpandChevron(expanded, enabled = true, color = c.error) {
+                        expanded = !expanded
+                    }
+                }
+            }
+        }
+    }
+}
 
 // FIX #8 — Simple text helper used inside AlertDialog title/text lambdas throughout
 // the app. Was accidentally deleted during the formatAttempts addition; restored
@@ -910,15 +967,10 @@ fun ResultsScreen(vm: TrainerViewModel) {
             Txt("New questions introduced: ${r.introduced}", 14, FontWeight.Medium, c.muted)
         }
 
-        AppCard {
-            Txt("To review", 16, FontWeight.Bold)
-            if (r.missed.isEmpty()) {
-                Txt("No mistakes this session. Great work!", 14, FontWeight.Medium, c.success)
-            } else {
-                r.missed.take(15).forEach { Txt(it, 15, FontWeight.Medium, c.error) }
-                if (r.missed.size > 15) Txt("… and ${r.missed.size - 15} more", 13, FontWeight.Normal, c.muted)
-            }
-        }
+        // FIX #8 — "To Review" is now a proper collapsible section using the same
+        // section title and chevron as the Progress tables. It shows the first 3
+        // mistakes by default, and a chevron expands to the full list (no cap).
+        ReviewSection(r.missed)
 
         GradientButton("Practice again", Modifier.fillMaxWidth()) { vm.startSession() }
         // FIX #8 — resolve the current category once, reuse for both secondary buttons.

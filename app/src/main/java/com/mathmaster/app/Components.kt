@@ -63,11 +63,11 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
-import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.Color
+import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.Path
 import androidx.compose.ui.graphics.PathMeasure
 import androidx.compose.ui.graphics.Shape
@@ -832,8 +832,6 @@ private fun flashTexts(catId: String): List<String> = when (catId) {
 @Composable
 fun FlashcardBackdrop(catId: String, modifier: Modifier = Modifier) {
     val texts = remember(catId) { flashTexts(catId) }
-    // Pre-compute everything that doesn't depend on measured size. This runs once
-    // per category, not once per scroll frame.
     val tileData = remember(texts) {
         FLASH_TILES.mapIndexed { i, t ->
             TileDraw(
@@ -843,19 +841,11 @@ fun FlashcardBackdrop(catId: String, modifier: Modifier = Modifier) {
             )
         }
     }
-    val paint = remember {
-        android.graphics.Paint().apply {
-            isAntiAlias = true
-            textAlign = android.graphics.Paint.Align.CENTER
-            typeface = android.graphics.Typeface.DEFAULT_BOLD
-        }
-    }
 
     Canvas(modifier) {
         val w = size.width
         val h = size.height
         val density = this.density
-        paint.textSize = 17.sp.toPx()
 
         tileData.forEach { td ->
             val tileW = td.w * density
@@ -863,7 +853,9 @@ fun FlashcardBackdrop(catId: String, modifier: Modifier = Modifier) {
             val cx = w * td.x
             val cy = h * td.y
 
-            rotate(td.rot, pivot = Offset(cx, cy)) {
+            // FIX #8 — Use Compose's native rotate scope instead of the modifier.
+            // This avoids needing the `rotate` modifier import and is faster.
+            androidx.compose.ui.graphics.drawscope.rotate(degrees = td.rot, pivot = Offset(cx, cy)) {
                 val left = cx - tileW / 2f
                 val top = cy - tileH / 2f
                 val radius = 8.dp.toPx()
@@ -872,21 +864,27 @@ fun FlashcardBackdrop(catId: String, modifier: Modifier = Modifier) {
                 drawRoundRect(
                     color = Color.White.copy(alpha = 0.12f * td.fade),
                     topLeft = Offset(left, top),
-                    size = Size(tileW, tileH),
-                    cornerRadius = CornerRadius(radius, radius)
+                    size = androidx.compose.ui.geometry.Size(tileW, tileH),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius, radius)
                 )
                 // Border
                 drawRoundRect(
                     color = Color.White.copy(alpha = 0.22f * td.fade),
                     topLeft = Offset(left, top),
-                    size = Size(tileW, tileH),
-                    cornerRadius = CornerRadius(radius, radius),
+                    size = androidx.compose.ui.geometry.Size(tileW, tileH),
+                    cornerRadius = androidx.compose.ui.geometry.CornerRadius(radius, radius),
                     style = Stroke(width = 1.dp.toPx())
                 )
-                // Text — via Android native canvas (no Compose layout node)
-                paint.color = android.graphics.Color.argb(
-                    (0.42f * td.fade * 255).toInt(), 255, 255, 255
-                )
+                // Text — via Compose's drawText with a native paint
+                val paint = android.graphics.Paint().apply {
+                    isAntiAlias = true
+                    textAlign = android.graphics.Paint.Align.CENTER
+                    typeface = android.graphics.Typeface.DEFAULT_BOLD
+                    textSize = 17.sp.toPx()
+                    color = android.graphics.Color.argb(
+                        (0.42f * td.fade * 255).toInt(), 255, 255, 255
+                    )
+                }
                 val lines = td.text.split('\n')
                 val lineH = paint.textSize * 1.1f
                 val totalTextH = lineH * lines.size

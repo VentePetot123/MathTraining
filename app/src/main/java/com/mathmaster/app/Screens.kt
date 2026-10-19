@@ -156,23 +156,60 @@ fun MenuScreen(vm: TrainerViewModel) {
         modifier = Modifier
             .fillMaxSize()
             .background(c.background),
-        // FIX #8 — use the VM-held scroll state so the scroll position survives
-        // navigating away and returning. Picking 3ⁿ at the bottom, backing out, and
-        // coming back keeps you at the bottom — no re-scroll needed.
         state = vm.menuScrollState,
         contentPadding = PaddingValues(16.dp),
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        item(span = { GridItemSpan(maxLineSpan) }) { MenuHeader(vm) { vm.openProgress() } }
-        // FIX #8 — reverted the "full-width last card" experiment. With an odd number
-        // of categories (11), the last card would span 2 columns and become a wide
-        // rectangle. Letting it stay in its normal single-column slot keeps every
-        // card the same square shape — the small gap on the right of the last row is
-        // a standard grid behavior and looks fine.
-        itemsIndexed(Categories.all) { index, cat ->
+        item(key = "title", span = { GridItemSpan(maxLineSpan) }) { MenuTitle() }
+        item(key = "progress", span = { GridItemSpan(maxLineSpan) }) { MenuHeader(vm) { vm.openProgress() } }
+        item(key = "separator", span = { GridItemSpan(maxLineSpan) }) { MenuSeparator("Categories") }
+        item(key = "welcome", span = { GridItemSpan(maxLineSpan) }) { WelcomeMessage() }
+        itemsIndexed(
+            Categories.all,
+            span = { index, _ ->
+                if (index == Categories.all.lastIndex && Categories.all.size % 2 == 1)
+                    GridItemSpan(maxLineSpan) else GridItemSpan(1)
+            }
+        ) { index, cat ->
             CategoryCard(index, cat, vm.menuStats[cat.id]) { vm.openCategory(cat) }
         }
+    }
+}
+
+@Composable
+fun MenuTitle() {
+    val c = AppTheme.colors
+    Row(
+        Modifier.fillMaxWidth().padding(top = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        LogoMark(46.dp)
+        Column {
+            Txt("Math Master", 28, FontWeight.ExtraBold, c.onBackground, lineHeight = 30)
+            Txt("Train your mind. Adaptively.", 12, FontWeight.Medium, c.muted)
+        }
+    }
+}
+
+@Composable
+fun WelcomeMessage() {
+    val c = AppTheme.colors
+    val hour = remember { java.util.Calendar.getInstance().get(java.util.Calendar.HOUR_OF_DAY) }
+    val greeting = when (hour) {
+        in 5..11 -> "Good morning"
+        in 12..17 -> "Good afternoon"
+        else -> "Good evening"
+    }
+    Column(
+        Modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Txt("$greeting!", 20, FontWeight.ExtraBold, c.onBackground, align = TextAlign.Center)
+        Txt("Welcome to your training today", 14, FontWeight.SemiBold, c.accentA, align = TextAlign.Center)
+        Txt("Pick a category and let's sharpen your mind.", 12, FontWeight.Medium, c.muted, align = TextAlign.Center)
     }
 }
 
@@ -180,23 +217,27 @@ fun MenuScreen(vm: TrainerViewModel) {
 fun MenuHeader(vm: TrainerViewModel, onOpenProgress: () -> Unit) {
     val shape = RoundedCornerShape(26.dp)
     val t = vm.totals
-    Column(
+    Row(
         Modifier
             .fillMaxWidth()
             .shadow(10.dp, shape)
             .clip(shape)
             .background(AppTheme.colors.accent)
-            .bounceClick(shape, 0.dp, onClick = onOpenProgress)   // FIX #8: no second shadow layer
+            .bounceClick(shape, 0.dp, onClick = onOpenProgress)
             .clip(shape)
             .padding(22.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        verticalAlignment = Alignment.CenterVertically
     ) {
-        Txt("Math Master", 28, FontWeight.ExtraBold, Color.White)
-        Txt("Tap to view your progress", 14, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
-        val summary = if (t.answers > 0)
-            "${t.answers} answers · ${t.sessions} sessions · best streak ${t.bestStreak}"
-        else "Your progress will appear here"
-        Txt(summary, 12, FontWeight.Medium, Color.White.copy(alpha = 0.85f))
+        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+            Txt("Progress Dashboard", 22, FontWeight.ExtraBold, Color.White)
+            Txt("Tap to view your progress", 13, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
+            // FIX #8 — Always show the actual numbers, even at zero. Previously we showed
+            // "Your progress will appear here" until the user practiced, which hid the
+            // fact that the counters existed. Now the row is visible from the first launch.
+            val summary = "${t.answers} Answers · ${t.sessions} Sessions · Best Streak ${t.bestStreak} 🔥"
+            Txt(summary, 12, FontWeight.Medium, Color.White.copy(alpha = 0.85f))
+        }
+        ProgressGlyph()
     }
 }
 

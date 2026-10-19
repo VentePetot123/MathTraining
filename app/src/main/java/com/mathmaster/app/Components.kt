@@ -860,6 +860,53 @@ fun FlashcardBackdrop(catId: String, modifier: Modifier = Modifier) {
     }
 }
 
+// Small rising-bars icon for the Progress Dashboard card, drawn in code.
+@Composable
+fun ProgressGlyph(modifier: Modifier = Modifier) {
+    Canvas(modifier.size(46.dp)) {
+        val sw = 8.dp.toPx()
+        val r = sw / 2f
+        val h = size.height
+        val bars = listOf(0.20f to 0.38f, 0.50f to 0.65f, 0.80f to 0.95f)   // x position, height
+        bars.forEachIndexed { i, (xf, hf) ->
+            drawLine(
+                Color.White.copy(alpha = 0.55f + 0.2f * i),
+                Offset(size.width * xf, h - r - (h - sw) * hf + r),
+                Offset(size.width * xf, h - r),
+                sw, StrokeCap.Round
+            )
+        }
+    }
+}
+
+// Obvious divider between the dashboard card and the categories.
+@Composable
+fun MenuSeparator(label: String) {
+    val c = AppTheme.colors
+    Row(
+        Modifier.fillMaxWidth().padding(top = 10.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(12.dp)
+    ) {
+        Box(
+            Modifier.weight(1f).height(2.dp).clip(RoundedCornerShape(1.dp))
+                // FIX #8 — use the top-level Brush.horizontalGradient function
+                .background(Brush.horizontalGradient(listOf(Color.Transparent, c.accentA)))
+        )
+        Text(
+            text = label.uppercase(),
+            color = c.accentA,
+            fontSize = 13.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 2.sp
+        )
+        Box(
+            Modifier.weight(1f).height(2.dp).clip(RoundedCornerShape(1.dp))
+                .background(Brush.horizontalGradient(listOf(c.accentA, Color.Transparent)))
+        )
+    }
+}
+
 @Composable
 fun RoundButton(text: String, onClick: () -> Unit) {
     Box(

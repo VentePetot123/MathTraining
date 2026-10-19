@@ -6,6 +6,8 @@ import androidx.compose.animation.core.FastOutSlowInEasing
 import androidx.compose.animation.core.animateFloatAsState
 import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
+import androidx.compose.foundation.border
+import androidx.compose.foundation.layout.IntrinsicSize
 import androidx.compose.foundation.Canvas
 import androidx.compose.foundation.background
 import androidx.compose.foundation.text.BasicTextField
@@ -585,6 +587,198 @@ fun BackChevron(modifier: Modifier = Modifier, color: Color = Color.White) {
             path, color,
             style = Stroke(width = 3.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
         )
+    }
+}
+
+// ---------- Progress card pieces ----------
+
+// Centered section heading with a line on each side: MASTERY, STRENGTH LIST, ...
+@Composable
+fun SectionTitle(text: String) {
+    val c = AppTheme.colors
+    Row(
+        Modifier.fillMaxWidth().padding(vertical = 4.dp),
+        verticalAlignment = Alignment.CenterVertically,
+        horizontalArrangement = Arrangement.spacedBy(10.dp)
+    ) {
+        Box(Modifier.weight(1f).height(1.dp).background(c.accentA.copy(alpha = 0.35f)))
+        Text(
+            text = text.uppercase(),
+            color = c.accentA,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 1.6.sp
+        )
+        Box(Modifier.weight(1f).height(1.dp).background(c.accentA.copy(alpha = 0.35f)))
+    }
+}
+
+// Medal drawn in code: V-shaped ribbon, disc, ring and star.
+@Composable
+fun Medal(color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(26.dp)) {
+        val w = size.width
+        val left = Path().apply {
+            moveTo(w * 0.22f, 0f); lineTo(w * 0.42f, 0f)
+            lineTo(w * 0.60f, w * 0.46f); lineTo(w * 0.40f, w * 0.46f); close()
+        }
+        val right = Path().apply {
+            moveTo(w * 0.78f, 0f); lineTo(w * 0.58f, 0f)
+            lineTo(w * 0.40f, w * 0.46f); lineTo(w * 0.60f, w * 0.46f); close()
+        }
+        drawPath(left, color.copy(alpha = 0.55f))
+        drawPath(right, color.copy(alpha = 0.85f))
+
+        val cx = w * 0.5f
+        val cy = w * 0.68f
+        val r = w * 0.30f
+        drawCircle(color, r, Offset(cx, cy))
+        drawCircle(Color.Black.copy(alpha = 0.25f), r * 0.80f, Offset(cx, cy), style = Stroke(width = w * 0.04f))
+
+        val star = Path()
+        for (i in 0 until 10) {
+            val ang = Math.PI / 5 * i - Math.PI / 2
+            val rad = if (i % 2 == 0) r * 0.62f else r * 0.26f
+            val px = cx + (Math.cos(ang) * rad).toFloat()
+            val py = cy + (Math.sin(ang) * rad).toFloat()
+            if (i == 0) star.moveTo(px, py) else star.lineTo(px, py)
+        }
+        star.close()
+        drawPath(star, Color.White.copy(alpha = 0.92f))
+    }
+}
+
+// "Best Strength" / "Worse Weakness": medal + title on top, the fact in a rounded box below.
+@Composable
+fun HighlightBox(title: String, value: String, color: Color) {
+    val c = AppTheme.colors
+    val empty = value == "No data yet" || value == "None yet"
+    Column(
+        Modifier.fillMaxWidth().padding(top = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            Medal(color)
+            Txt(title, 15, FontWeight.Bold, color)
+        }
+        Box(
+            Modifier
+                .clip(RoundedCornerShape(14.dp))
+                .background(color.copy(alpha = 0.14f))
+                .border(1.dp, color.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
+                .padding(horizontal = 22.dp, vertical = 8.dp),
+            contentAlignment = Alignment.Center
+        ) {
+            Txt(
+                value,
+                if (empty) 14 else 22,
+                if (empty) FontWeight.Medium else FontWeight.ExtraBold,
+                if (empty) c.muted else c.onBackground,
+                align = TextAlign.Center
+            )
+        }
+    }
+}
+
+// Down chevron drawn in code; rotates to point up when the list is expanded.
+@Composable
+fun ExpandChevron(expanded: Boolean, enabled: Boolean, color: Color, onClick: () -> Unit) {
+    val rot by animateFloatAsState(if (expanded) 180f else 0f, tween(200), label = "chev")
+    Box(
+        Modifier
+            .size(width = 56.dp, height = 30.dp)
+            .clip(RoundedCornerShape(15.dp))
+            .then(if (enabled) Modifier.clickable(onClick = onClick) else Modifier),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(Modifier.size(width = 20.dp, height = 12.dp).graphicsLayer { rotationZ = rot }) {
+            val pad = 2.dp.toPx()
+            val p = Path().apply {
+                moveTo(pad, pad)
+                lineTo(size.width / 2f, size.height - pad)
+                lineTo(size.width - pad, pad)
+            }
+            drawPath(
+                p, color.copy(alpha = if (enabled) 1f else 0.3f),
+                style = Stroke(width = 2.5.dp.toPx(), cap = StrokeCap.Round, join = StrokeJoin.Round)
+            )
+        }
+    }
+}
+
+// Excel-style ranked table: [rank | fact + Avg. Time | count + label]
+// Top 3 get a stronger-to-lighter tint; the chevron expands to up to 100 rows.
+@Composable
+fun RankTable(
+    title: String,
+    items: List<AdaptiveEngine.FactDetail>,
+    strong: Boolean
+) {
+    if (items.isEmpty()) return
+    val c = AppTheme.colors
+    val accent = if (strong) c.success else c.error
+    val line = Color.White.copy(alpha = 0.14f)
+    var expanded by remember { mutableStateOf(false) }
+    val shown = if (expanded) items.take(100) else items.take(3)
+
+    Column(
+        Modifier.fillMaxWidth().padding(top = 6.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
+        SectionTitle(title)
+
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .clip(RoundedCornerShape(12.dp))
+                .border(1.dp, line, RoundedCornerShape(12.dp))
+        ) {
+            shown.forEachIndexed { i, d ->
+                if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(line))
+                val tint = when (i) { 0 -> 0.30f; 1 -> 0.20f; 2 -> 0.12f; else -> 0f }
+                val count = if (strong) d.correct else d.incorrect
+                val label = if (strong) (if (count == 1) "Correct" else "Corrects")
+                            else (if (count == 1) "Wrong" else "Wrongs")
+
+                Row(
+                    Modifier
+                        .fillMaxWidth()
+                        .background(accent.copy(alpha = tint))
+                        .height(IntrinsicSize.Min)
+                ) {
+                    Box(Modifier.width(36.dp).fillMaxHeight(), contentAlignment = Alignment.Center) {
+                        Txt("${i + 1}", 14, FontWeight.ExtraBold, accent)
+                    }
+                    Box(Modifier.width(1.dp).fillMaxHeight().background(line))
+                    Column(
+                        Modifier.weight(1f).padding(horizontal = 10.dp, vertical = 7.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally
+                    ) {
+                        Txt(d.key, 15, FontWeight.Bold, c.onBackground, align = TextAlign.Center)
+                        Txt(
+                            "Avg. Time: " + String.format(java.util.Locale.US, "%.1f", d.avgMs / 1000.0) + " s",
+                            10, FontWeight.Medium, c.muted
+                        )
+                    }
+                    Box(Modifier.width(1.dp).fillMaxHeight().background(line))
+                    Column(
+                        Modifier.width(84.dp).fillMaxHeight().padding(vertical = 7.dp),
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.Center
+                    ) {
+                        Txt("$count", 15, FontWeight.ExtraBold, accent)
+                        Txt(label, 10, FontWeight.Medium, c.muted)
+                    }
+                }
+            }
+        }
+
+        ExpandChevron(expanded, enabled = items.size > 3, color = accent) { expanded = !expanded }
     }
 }
 

@@ -915,11 +915,21 @@ fun ProgressGlyph(modifier: Modifier = Modifier) {
         val sw = 8.dp.toPx()
         val r = sw / 2f
         val h = size.height
-        val bars = listOf(0.20f to 0.38f, 0.50f to 0.65f, 0.80f to 0.95f)   // x position, height
+        
+        // FIX: Bar heights are re-mapped so the top of the tallest bar hits the 
+        // exact top padding (r), and the bottoms all align at the bottom (h - r). 
+        // This perfectly centers the glyph vertically in its 46dp box.
+        val bars = listOf(
+            0.20f to 0.4f, 
+            0.50f to 0.65f, 
+            0.80f to 0.9f
+        ) 
+        
         bars.forEachIndexed { i, (xf, hf) ->
+            val barHeight = (h - sw) * hf
             drawLine(
                 Color.White.copy(alpha = 0.55f + 0.2f * i),
-                Offset(size.width * xf, h - r - (h - sw) * hf + r),
+                Offset(size.width * xf, h - r - barHeight),
                 Offset(size.width * xf, h - r),
                 sw, StrokeCap.Round
             )

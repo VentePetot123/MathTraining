@@ -1201,15 +1201,15 @@ fun CategoryProgressSection(
         }
 
         // Mastery breakdown (three stacked bars)
-        Txt("Mastery", 11, FontWeight.SemiBold, c.muted)
+        SectionTitle("Mastery")
         MasteryBar("Mastered",   mastery.first,    c.success)
         MasteryBar("Learning",   mastery.second,   c.warning)
         MasteryBar("Struggling", mastery.third,    c.error)
 
         // FIX #8: perf — summarize() allocates strings; cache on (mastery, details).
         val (strongTxt, weakTxt) = remember(mastery, details) { summarize(mastery, details) }
-        Txt("Top Strength: $strongTxt", 11, FontWeight.Medium, c.success)
-        Txt("Top Weakness: $weakTxt", 11, FontWeight.Medium, c.error)
+        HighlightBox("Best Strength", strongTxt, c.success)
+        HighlightBox("Worse Weakness", weakTxt, c.error)
 
         // FIX #8 — `detailed` gate: charts + detailed lists are shown only when the
         // caller opts in. Progress Dashboard (grid of cards) passes detailed = false
@@ -1239,32 +1239,9 @@ fun CategoryProgressSection(
                     )
             }
 
-            if (sortedByCorrect.isNotEmpty()) {
-                Txt("Strength list", 11, FontWeight.SemiBold, c.muted)
-                sortedByCorrect.take(5).forEach { d ->
-                    FactRow(d.key, d.correct, "correct", d.avgMs, c.success)
-                }
-            }
-
-            if (sortedByWrong.isNotEmpty()) {
-                Txt("Weakness list", 11, FontWeight.SemiBold, c.muted)
-                sortedByWrong.take(5).forEach { d ->
-                    FactRow(d.key, d.incorrect, "wrong", d.avgMs, c.error)
-                }
-            }
+            RankTable("Strength List", sortedByCorrect, strong = true)
+            RankTable("Weakness List", sortedByWrong, strong = false)
         }
-    }
-}
-
-@Composable
-private fun FactRow(fact: String, count: Int, countLabel: String, avgMs: Double, color: Color) {
-    val c = AppTheme.colors
-    Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
-        Column(Modifier.weight(1f)) {
-            Txt(fact, 12, FontWeight.SemiBold, c.onBackground)
-            Txt("Avg. Time: ${(avgMs / 1000.0).format1()} s", 10, FontWeight.Medium, c.muted)
-        }
-        Txt("$count $countLabel", 11, FontWeight.Bold, color)
     }
 }
 

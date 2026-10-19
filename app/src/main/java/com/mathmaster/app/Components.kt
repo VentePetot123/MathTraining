@@ -18,6 +18,7 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.ColumnScope
 import androidx.compose.foundation.layout.Row
@@ -25,6 +26,7 @@ import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
+import androidx.compose.foundation.layout.offset
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
@@ -58,6 +60,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.geometry.Size
@@ -781,6 +784,67 @@ fun RankTable(
 
         if (items.size > 3) {
             ExpandChevron(expanded, enabled = true, color = accent) { expanded = !expanded }
+        }
+    }
+}
+
+// ---------- Category card backdrop: scattered, tilted flashcards ----------
+
+private data class FlashTile(val x: Float, val y: Float, val rot: Float, val w: Int, val h: Int)
+
+// Positions are fractions of the card size, so it looks the same on any screen.
+private val FLASH_TILES = listOf(
+    FlashTile(0.50f, 0.00f, -14f, 62, 76),
+    FlashTile(0.84f, 0.06f, 9f, 58, 72),
+    FlashTile(0.16f, 0.22f, 6f, 56, 70),
+    FlashTile(0.64f, 0.34f, 15f, 64, 78),
+    FlashTile(0.96f, 0.40f, -10f, 56, 70),
+    FlashTile(0.36f, 0.56f, -8f, 60, 74),
+    FlashTile(0.78f, 0.74f, 5f, 62, 76),
+    FlashTile(0.06f, 0.78f, 12f, 56, 70),
+    FlashTile(0.52f, 0.96f, -12f, 62, 76)
+)
+
+private fun flashTexts(catId: String): List<String> = when (catId) {
+    "addition" -> listOf("6\n+2", "+11", "3\n+9", "8\n+5", "+7", "4\n+4", "12\n+9", "+15", "9\n+6")
+    "subtraction" -> listOf("9\n−4", "−3", "15\n−8", "12\n−5", "−7", "20\n−6", "−11", "8\n−2", "14\n−9")
+    "multiplication" -> listOf("3\n×4", "×7", "6\n×8", "9\n×5", "×12", "7\n×7", "2\n×9", "×6", "8\n×3")
+    "division" -> listOf("12\n÷3", "÷4", "36\n÷6", "20\n÷5", "÷9", "49\n÷7", "64\n÷8", "÷2", "18\n÷3")
+    "squares" -> listOf("5²", "√49", "9²", "√16", "12²", "√81", "7²", "√144", "3²")
+    "cubes" -> listOf("2³", "∛27", "4³", "∛8", "3³", "∛64", "5³", "∛125", "6³")
+    "fdp" -> listOf("½", "25%", "0.5", "¾", "⅓", "0.75", "10%", "⅕", "1/8")
+    "integers" -> listOf("−3", "+5", "−8", "−2\n+7", "−6", "4\n−9", "+9", "−1", "−5\n−5")
+    "powers2" -> listOf("2⁵", "64", "2⁸", "16", "2³", "128", "2¹⁰", "32", "2⁴")
+    "powers3" -> listOf("3²", "27", "3⁴", "9", "3³", "81", "3⁵", "243", "3¹")
+    "factorials" -> listOf("5!", "120", "4!", "24", "6!", "3!", "7!", "720", "2!")
+    else -> listOf("?", "1", "2", "3", "4", "5", "6", "7", "8")
+}
+
+@Composable
+fun FlashcardBackdrop(catId: String, modifier: Modifier = Modifier) {
+    val texts = remember(catId) { flashTexts(catId) }
+    BoxWithConstraints(modifier) {
+        FLASH_TILES.forEachIndexed { i, t ->
+            val shape = RoundedCornerShape(8.dp)
+            Box(
+                Modifier
+                    .offset(x = maxWidth * t.x - (t.w / 2).dp, y = maxHeight * t.y - (t.h / 2).dp)
+                    .size(t.w.dp, t.h.dp)
+                    .rotate(t.rot)
+                    .clip(shape)
+                    .background(Color.White.copy(alpha = 0.12f))
+                    .border(1.dp, Color.White.copy(alpha = 0.22f), shape),
+                contentAlignment = Alignment.Center
+            ) {
+                Text(
+                    text = texts[i % texts.size],
+                    color = Color.White.copy(alpha = 0.42f),
+                    fontSize = 17.sp,
+                    lineHeight = 19.sp,
+                    fontWeight = FontWeight.Bold,
+                    textAlign = TextAlign.Center
+                )
+            }
         }
     }
 }

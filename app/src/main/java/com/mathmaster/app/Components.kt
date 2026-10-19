@@ -664,6 +664,7 @@ fun HighlightBox(title: String, value: String, color: Color) {
         ) {
             Medal(color)
             Txt(title, 15, FontWeight.Bold, color)
+            Box(Modifier.size(26.dp))   // mirrors the medal so the title is truly centered
         }
         Box(
             Modifier
@@ -778,7 +779,9 @@ fun RankTable(
             }
         }
 
-        ExpandChevron(expanded, enabled = items.size > 3, color = accent) { expanded = !expanded }
+        if (items.size > 3) {
+            ExpandChevron(expanded, enabled = true, color = accent) { expanded = !expanded }
+        }
     }
 }
 

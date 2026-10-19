@@ -915,24 +915,26 @@ fun ProgressGlyph(modifier: Modifier = Modifier) {
         val sw = 8.dp.toPx()
         val r = sw / 2f
         val h = size.height
+        val w = size.width
+
+        // FIX: Define the actual visual bounds of the bars (height = 28.dp).
+        // We translate the canvas downward by (h - visualHeight)/2 to perfectly center it.
+        val visualHeight = 28.dp.toPx()
+        val topPadding = (h - visualHeight) / 2f
         
-        // FIX: Bar heights are re-mapped so the top of the tallest bar hits the 
-        // exact top padding (r), and the bottoms all align at the bottom (h - r). 
-        // This perfectly centers the glyph vertically in its 46dp box.
-        val bars = listOf(
-            0.20f to 0.4f, 
-            0.50f to 0.65f, 
-            0.80f to 0.9f
-        ) 
-        
-        bars.forEachIndexed { i, (xf, hf) ->
-            val barHeight = (h - sw) * hf
-            drawLine(
-                Color.White.copy(alpha = 0.55f + 0.2f * i),
-                Offset(size.width * xf, h - r - barHeight),
-                Offset(size.width * xf, h - r),
-                sw, StrokeCap.Round
-            )
+        translate(top = topPadding) {
+            // Bar heights are now relative to the visualHeight
+            // x fraction, height fraction (of visualHeight)
+            val bars = listOf(0.20f to 0.50f, 0.50f to 0.75f, 0.80f to 1.0f) 
+            bars.forEachIndexed { i, (xf, hf) ->
+                val barHeight = visualHeight * hf
+                drawLine(
+                    Color.White.copy(alpha = 0.55f + 0.2f * i),
+                    Offset(w * xf, visualHeight - r - (barHeight - sw) + r), // Bottom align
+                    Offset(w * xf, visualHeight - r), // Bottom anchor
+                    sw, StrokeCap.Round
+                )
+            }
         }
     }
 }

@@ -161,17 +161,18 @@ fun MenuScreen(vm: TrainerViewModel) {
         horizontalArrangement = Arrangement.spacedBy(14.dp),
         verticalArrangement = Arrangement.spacedBy(14.dp)
     ) {
-        item(key = "title", span = { GridItemSpan(maxLineSpan) }) { MenuTitle() }
-        item(key = "progress", span = { GridItemSpan(maxLineSpan) }) { MenuHeader(vm) { vm.openProgress() } }
-        item(key = "welcome", span = { GridItemSpan(maxLineSpan) }) { WelcomeMessage() }
-        // FIX #8 — separator now sits BELOW the welcome message, acting as a divider
-        // between the intro and the actual category grid.
-        item(key = "separator", span = { GridItemSpan(maxLineSpan) }) { MenuSeparator("Categories") }
-        // FIX #8 — Removed the `span` logic that forced the last odd category to span
-        // both columns. That turned the Factorials card into a wide rectangle. Letting
-        // it stay in its normal single-column slot keeps every card the same square
-        // shape. The small gap on the right of the last row is standard grid behavior.
-        itemsIndexed(Categories.all) { index, cat ->
+        // FIX #8 — add `contentType` to each item so Compose can reuse slots when
+        // scrolling. Without this, every recycled card forces a full recomposition
+        // because Compose can't tell "this slot previously held a category card".
+        item(key = "title", span = { GridItemSpan(maxLineSpan) }, contentType = "title") { MenuTitle() }
+        item(key = "progress", span = { GridItemSpan(maxLineSpan) }, contentType = "progress") {
+            MenuHeader(vm) { vm.openProgress() }
+        }
+        item(key = "welcome", span = { GridItemSpan(maxLineSpan) }, contentType = "welcome") { WelcomeMessage() }
+        item(key = "separator", span = { GridItemSpan(maxLineSpan) }, contentType = "separator") {
+            MenuSeparator("Categories")
+        }
+        itemsIndexed(Categories.all, contentType = { _, _ -> "category" }) { index, cat ->
             CategoryCard(index, cat, vm.menuStats[cat.id]) { vm.openCategory(cat) }
         }
     }

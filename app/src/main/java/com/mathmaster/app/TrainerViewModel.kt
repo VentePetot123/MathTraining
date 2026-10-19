@@ -569,11 +569,15 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     fun onKey(k: String) {
         val u = ui ?: return
         if (u.feedback != Feedback.None) return
-        // FIX #8 — allow up to 15 characters (covers longest reasonable decimals and
-        // fractions) instead of 12. The UI box will expand up to 120dp and shrink
-        // font accordingly; 15 chars is the practical limit for readability.
         if (u.input.length >= 160) return
+        
+        // FIX: ".", "/" and "%" can each appear only once per answer. 
+        // Note: mixing them is allowed (e.g., "33.33%"), but not typing the same one twice.
+        if ((k == "." || k == "/" || k == "%") && u.input.contains(k)) return
+        
+        // FIX: "-" can only be the first character.
         if (k == "-" && u.input.isNotEmpty()) return
+        
         ui = u.copy(input = u.input + k, hint = null)
     }
 
@@ -597,9 +601,15 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         val rt = runtime ?: return
         if (u.feedback != Feedback.None || u.input.isEmpty()) return
 
+        val problem = Grading.check(f, u.input)
+        if (problem != null) {
+            ui = u.copy(hint = problem)
+            return
+        }
+
         val verdict = Grading.grade(f, u.input)
         if (verdict == null) {
-            ui = u.copy(input = "", hint = "Check the answer format")
+            ui = u.copy(hint = "Check the answer format")
             return
         }
         // FIX #8 — guard against a zero timer (user submits before animation done).

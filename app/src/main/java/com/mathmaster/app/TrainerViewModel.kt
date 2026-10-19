@@ -680,6 +680,11 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         if (screen != Screen.Training) return
         val u = ui ?: return
         val rt = runtime ?: return
+
+        // FIX #8 — play the session-complete fanfare.
+        if (soundEnabled) {
+            soundManager.playSessionComplete()
+        }
         val cat = u.categoryId
         val score = u.score
         val total = u.total

@@ -202,51 +202,49 @@ fun MenuHeader(vm: TrainerViewModel, onOpenProgress: () -> Unit) {
 
 @Composable
 fun CategoryCard(index: Int, cat: Category, s: CatSummary?, onClick: () -> Unit) {
-    // FIX #8: perf — vertical Column layout (symbol → name → stat) so the three rows
-    // never collide. The name is capped at 2 lines with ellipsis so the stat row
-    // ("Not practiced yet" / "% acc · N facts") is always visible beneath it, even
-    // for the longest category name ("Fractions, Decimals, Percentages"). Card height
-    // stays 148dp; the extra breathing room comes from constraining the name to 2 lines.
-    Column(
+    Box(
         Modifier
             .fillMaxWidth()
             .height(170.dp)
             .bounceClick(RoundedCornerShape(22.dp), 8.dp, onClick = onClick)
             .background(Brush.linearGradient(listOf(cat.colorA, cat.colorB)))
-            .padding(16.dp),
-        verticalArrangement = Arrangement.SpaceBetween
     ) {
-        Txt(cat.symbol, 30, FontWeight.Bold, Color.White)
+        // Tilted flashcards in the background, clipped by the card's rounded corners
+        FlashcardBackdrop(cat.id, Modifier.matchParentSize())
 
-        Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
-            Text(
-                text = cat.name,
-                color = Color.White,
-                // FIX #8 — title is now 16sp ExtraBold (was 14sp Bold) so it reads as
-                // a proper header. lineHeight set to 18sp gives a clean compact lead.
-                fontSize = 16.sp,
-                fontWeight = FontWeight.ExtraBold,
-                maxLines = 2,
-                overflow = TextOverflow.Ellipsis,
-                lineHeight = 18.sp
+        // Soft shade at the bottom so the text stays readable
+        Box(
+            Modifier.matchParentSize().background(
+                Brush.verticalGradient(
+                    0.45f to Color.Transparent,
+                    1f to Color.Black.copy(alpha = 0.30f)
+                )
             )
-            // FIX #8 — small spacer for breathing room between title and stat.
-            Spacer(Modifier.height(2.dp))
-            val stat = if (s == null || s.attempts == 0) "Not practiced yet"
-            else "${formatAttempts(s.attempts)} attempts · ${s.accuracyPct}% accuracy"
-            
-            // FIX #8 — Future-proofing: If the text is very long (e.g., 1500 attempts),
-            // shrink the font slightly so it fits on ONE line. If it's still too long,
-            // it will ellipsize instead of wrapping and breaking the card layout.
-            val statSize = if (stat.length > 20) 10 else 11
-            Text(
-                text = stat,
-                color = Color.White.copy(alpha = 0.85f),
-                fontSize = statSize.sp,
-                fontWeight = FontWeight.Medium,
-                maxLines = 1,
-                overflow = TextOverflow.Ellipsis
-            )
+        )
+
+        Column(
+            Modifier.fillMaxSize().padding(16.dp),
+            verticalArrangement = Arrangement.SpaceBetween
+        ) {
+            Txt(cat.symbol, 30, FontWeight.Bold, Color.White)
+
+            Column(verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Text(
+                    text = cat.name,
+                    color = Color.White,
+                    fontSize = 16.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    maxLines = 2,
+                    overflow = TextOverflow.Ellipsis,
+                    lineHeight = 18.sp
+                )
+                Spacer(Modifier.height(2.dp))
+                // FIX #8 — keep the "999+" formatter we added earlier. Claude's version
+                // reverted to the raw attempts count which can overflow on very high counts.
+                val stat = if (s == null || s.attempts == 0) "Not practiced yet"
+                else "${formatAttempts(s.attempts)} attempts · ${s.accuracyPct}% accuracy"
+                Txt(stat, 11, FontWeight.Medium, Color.White.copy(alpha = 0.9f))
+            }
         }
     }
 }

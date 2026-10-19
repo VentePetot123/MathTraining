@@ -241,16 +241,16 @@ private fun genFdp(lo0: Int, hi0: Int): List<Fact> {
         val pctNote = if (isInfinite) "Round to 2 decimal places" else null
 
         map["$frac → %"] = Fact(
-            "$frac → %", "$frac = ? %", pct, "$frac = $pct",
+            "$frac → %", "$frac = ? (Percentage)", pct, "$frac = $pct",
             Kind.PCT, pctNote
         )
         map["$frac → dec"] = Fact(
-            "$frac → dec", "$frac = ? (decimal)", dec, "$frac = $dec",
+            "$frac → dec", "$frac = ? (Decimal)", dec, "$frac = $dec",
             Kind.DEC, decNote, isInfinite
         )
         if (!map.containsKey("$pct → frac")) {
             map["$pct → frac"] = Fact(
-                "$pct → frac", "$pct = ? (fraction)", frac, "$pct = $frac",
+                "$pct → frac", "$pct = ? (Fraction)", frac, "$pct = $frac",
                 Kind.FRAC
             )
         }
@@ -288,6 +288,30 @@ object Categories {
 }
 
 object Grading {
+    /** A yellow hint when the input can't be graded yet, or null when it is ready to grade. */
+    fun check(f: Fact, raw: String): String? {
+        val t = raw.trim()
+        if (t.isEmpty()) return null
+        when (f.kind) {
+            Kind.INT -> {
+                if (t == "-") return "Add a number after the minus sign"
+            }
+            Kind.DEC -> {
+                if (t == ".") return "Add digits to the decimal point"
+                if (!t.contains('.')) return "Add a decimal point (.)"
+            }
+            Kind.FRAC -> {
+                if (!t.contains('/')) return "Use a fraction format (e.g., 1/2)"
+                if (t.startsWith("/") || t.endsWith("/")) return "Add numbers on both sides of the slash (/)"
+            }
+            Kind.PCT -> {
+                if (t == "%") return "Add a number before the %"
+                if (!t.contains('%')) return "Add a % sign for the percentage"
+                if (!t.endsWith("%")) return "Put the % sign at the end"
+            }
+        }
+        return null
+    }
     /** True/False when graded, null when the input cannot be parsed. */
     fun grade(f: Fact, raw: String): Boolean? {
         val t = raw.trim().replace(",", "").replace(" ", "")

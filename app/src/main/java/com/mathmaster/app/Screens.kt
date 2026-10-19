@@ -563,6 +563,7 @@ fun TrainingScreen(vm: TrainerViewModel) {
             Keypad(
                 fractionKeys = cat.usesFractionKeys,
                 enabled = u.feedback == Feedback.None,
+                canSubmit = u.input.isNotEmpty(), // FIX: Only clickable when input exists
                 onKey = vm::onKey,
                 onDelete = vm::onDelete,
                 onClear = vm::onClear,
@@ -745,7 +746,14 @@ fun QuestionCard(u: UiSession, onShown: () -> Unit = {}) {
             when (u.feedback) {
                 Feedback.None -> {
                     if (u.hint != null) {
-                        Txt(u.hint, 14, FontWeight.Medium, c.warning)
+                        Txt(
+                            text = u.hint, 
+                            size = 14, 
+                            weight = FontWeight.Medium, 
+                            color = c.warning, 
+                            modifier = Modifier.fillMaxWidth(), 
+                            align = TextAlign.Center
+                        )
                     }
                 }
                 else -> {
@@ -787,16 +795,13 @@ fun QuestionCard(u: UiSession, onShown: () -> Unit = {}) {
 fun Keypad(
     fractionKeys: Boolean,
     enabled: Boolean,
+    canSubmit: Boolean, // FIX: New parameter
     onKey: (String) -> Unit,
     onDelete: () -> Unit,
     onClear: () -> Unit,
     onSubmit: () -> Unit,
-    signedKeys: Boolean = false // FIX #8 — show minus button for Integers
+    signedKeys: Boolean = false 
 ) {
-    // FIX #8: perf — capture callbacks via rememberUpdatedState so the lambda
-    // reference doesn't change identity on each recomposition of TrainingScreen.
-    // Compose can now SKIP the entire keypad when `enabled` and `fractionKeys`
-    // haven't changed (i.e., typing a digit doesn't touch the keypad's inputs).
     val onKeyLatest = rememberUpdatedState(onKey)
     val onDeleteLatest = rememberUpdatedState(onDelete)
     val onClearLatest = rememberUpdatedState(onClear)
@@ -809,6 +814,7 @@ fun Keypad(
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
+        // ... (keep the 1-9, C, 0, ⌫ rows exactly as they are) ...
         listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9")).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEach { k ->
@@ -819,7 +825,6 @@ fun Keypad(
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             KeyButton("C", Modifier.weight(1f), enabled) { onClearLatest.value() }
             KeyButton("0", Modifier.weight(1f), enabled) { onKeyLatest.value("0") }
-            // FIX #8: perf — backspace supports hold-to-repeat, like a native keyboard.
             KeyButtonRepeat("⌫", Modifier.weight(1f), enabled) { onDeleteLatest.value() }
         }
         if (fractionKeys) {
@@ -830,18 +835,17 @@ fun Keypad(
             }
         } else if (signedKeys) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                // FIX #8 — empty slot on the left
                 Spacer(Modifier.weight(1f))
-                // FIX #8 — "−" key centered in the middle column (directly under "0")
                 KeyButton("−", Modifier.weight(1f), enabled) { onKeyLatest.value("-") }
-                // FIX #8 — empty slot on the right
                 Spacer(Modifier.weight(1f))
             }
         }
+        
+        // FIX: Submit button now dims/disables if `canSubmit` is false (empty input)
         GradientButton(
             "Submit",
             Modifier.fillMaxWidth(),
-            enabled = enabled,
+            enabled = enabled && canSubmit,
             onClick = { onSubmitLatest.value() }
         )
     }

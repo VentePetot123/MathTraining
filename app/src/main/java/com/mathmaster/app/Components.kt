@@ -352,7 +352,9 @@ fun Stepper(
 
     Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
         Txt(label, 13, FontWeight.Medium, c.muted, Modifier.weight(1f))
-        RoundButtonSmall("−") { onChange(nextDown(value)) }
+        // FIX #8 — use the instant (no-debounce) variant so rapid spam-tapping
+        // registers every press immediately, matching native counter behavior.
+        RoundButtonSmallInstant("−") { onChange(nextDown(value)) }
         Box(
             Modifier
                 .width(52.dp)
@@ -361,7 +363,7 @@ fun Stepper(
         ) {
             Txt(value.toString(), 18, FontWeight.Bold, c.onBackground, align = TextAlign.Center)
         }
-        RoundButtonSmall("+") { onChange(nextUp(value)) }
+        RoundButtonSmallInstant("+") { onChange(nextUp(value)) }
     }
 
     if (editing) {

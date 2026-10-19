@@ -75,6 +75,7 @@ import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.foundation.LocalIndication
 import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
@@ -855,7 +856,7 @@ fun FlashcardBackdrop(catId: String, modifier: Modifier = Modifier) {
 
             // FIX #8 — Use Compose's native rotate scope instead of the modifier.
             // This avoids needing the `rotate` modifier import and is faster.
-            androidx.compose.ui.graphics.drawscope.rotate(degrees = td.rot, pivot = Offset(cx, cy)) {
+            rotate(degrees = td.rot, pivot = Offset(cx, cy)) {
                 val left = cx - tileW / 2f
                 val top = cy - tileH / 2f
                 val radius = 8.dp.toPx()

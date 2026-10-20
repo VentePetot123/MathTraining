@@ -929,6 +929,12 @@ fun QuestionCard(u: UiSession, liveTickMs: Long = 0L, onShown: () -> Unit = {}) 
             len <= 80 -> 14
             else -> 13
         }
+        // Digits per line: smaller text fits more per row, so long answers use fewer lines.
+        val perLine = when {
+            len <= 40 -> 20   // up to 2 lines
+            len <= 80 -> 27   // up to 3 lines
+            else -> 32        // up to 5 lines (160 digits)
+        }
         Box(
             Modifier
                 .fillMaxWidth()
@@ -942,7 +948,7 @@ fun QuestionCard(u: UiSession, liveTickMs: Long = 0L, onShown: () -> Unit = {}) 
                 Txt("?", 28, FontWeight.Bold, c.muted)
             } else {
                 Text(
-                    text = u.input.chunked(20).joinToString("\n"),
+                    text = u.input.chunked(perLine).joinToString("\n"),
                     color = c.onBackground,
                     fontSize = inputSize.sp,
                     lineHeight = (inputSize * 1.35f).sp,
@@ -988,7 +994,7 @@ fun QuestionCard(u: UiSession, liveTickMs: Long = 0L, onShown: () -> Unit = {}) 
                             FeedbackMark(ok, u.seq, Modifier.size(22.dp))
                             val longAns = fact.answer.length > 14
                             Text(
-                                text = if (longAns) fact.answer.chunked(20).joinToString("\n") else fact.answer,
+                                text = if (longAns) fact.answer.chunked(32).joinToString("\n") else fact.answer,
                                 color = resultColor,
                                 fontSize = (if (longAns) 13 else 20).sp,
                                 lineHeight = (if (longAns) 18 else 24).sp,
@@ -1250,7 +1256,9 @@ fun ResultsScreen(vm: TrainerViewModel) {
 
             // Streak: label + number/flame, both centered, trimmed to visible bounds
             Column(
-                Modifier.fillMaxWidth(),
+                Modifier
+                    .fillMaxWidth()
+                    .padding(vertical = 8.dp),   // <-- adds equal space above and below
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {

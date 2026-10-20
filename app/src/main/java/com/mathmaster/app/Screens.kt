@@ -1625,7 +1625,8 @@ fun CategoryProgressSection(
 
         if (details.isNotEmpty()) {
             Column(
-                Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                // Reduced bottom padding to bring the section closer to the charts
+                Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
                 SectionTitle("All Time Best")
@@ -1641,7 +1642,10 @@ fun CategoryProgressSection(
         }
 
         if (detailed) {
-            SectionTitle("Accuracy & Speed Chart")
+            // Added top padding so the gap perfectly matches the gap above "All Time Best"
+            Column(Modifier.padding(top = 8.dp)) {
+                SectionTitle("Accuracy & Speed Chart")
+            }
             TrendChart(history)
 
             val sortedByCorrect = remember(details) {

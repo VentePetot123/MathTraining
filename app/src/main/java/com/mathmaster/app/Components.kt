@@ -587,7 +587,7 @@ private fun ChartPanel(
         if (bottomText != null) {
             Text(
                 text = bottomText,
-                color = Color(0xFF3DD9A0), // Green color matching accuracy
+                color = color, // <-- Uses the theme-aware color passed into ChartPanel
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center,

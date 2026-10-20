@@ -264,8 +264,17 @@ fun MenuHeader(vm: TrainerViewModel, onOpenProgress: () -> Unit) {
             // FIX #8 — Always show the actual numbers, even at zero. Previously we showed
             // "Your progress will appear here" until the user practiced, which hid the
             // fact that the counters existed. Now the row is visible from the first launch.
-            val summary = "${t.answers} Answers · ${t.sessions} Sessions · Best Streak ${t.bestStreak} 🔥"
-            Txt(summary, 12, FontWeight.Medium, Color.White.copy(alpha = 0.85f))
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(4.dp)
+            ) {
+                Txt(
+                    "${t.answers} Answers · ${t.sessions} Sessions · Best Streak ${t.bestStreak}",
+                    12, FontWeight.Medium, Color.White.copy(alpha = 0.85f),
+                    modifier = Modifier.weight(1f, fill = false)
+                )
+                FlameIcon(14.dp)
+            }
         }
         ProgressGlyph()
     }
@@ -770,7 +779,13 @@ private fun HeaderBar(
         Spacer(Modifier.width(12.dp))
         Column(horizontalAlignment = Alignment.End) {
             Txt("Q ${minOf(answered + 1, total)}/$total", 17, FontWeight.Bold)
-            Txt("Score $score · Streak $streak 🔥", 12, FontWeight.Medium, c.muted)
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.spacedBy(3.dp)
+            ) {
+                Txt("Score $score · Streak $streak", 12, FontWeight.Medium, c.muted)
+                FlameIcon(13.dp)
+            }
         }
     }
 }
@@ -1253,10 +1268,16 @@ fun ResultsScreen(vm: TrainerViewModel) {
                         fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp,
                         lineHeight = 12.sp
                     )
-                    Row {
-                        Txt("${r.best}", 48, FontWeight.ExtraBold, c.success, lineHeight = 48, modifier = Modifier.alignByBaseline())
-                        Spacer(Modifier.width(6.dp))
-                        Txt("🔥", 34, modifier = Modifier.alignByBaseline())
+                    Row(
+                        Modifier.fillMaxWidth(),
+                        horizontalArrangement = Arrangement.Center,
+                        verticalAlignment = Alignment.CenterVertically
+                    ) {
+                        Txt("${r.best}", 48, FontWeight.ExtraBold, c.success, lineHeight = 48)
+                        Spacer(Modifier.width(4.dp))
+                        Box(Modifier.alignByBaseline()) {
+                            FlameIcon(38.dp)
+                        }
                     }
                 }
             }
@@ -1685,23 +1706,24 @@ fun CategoryProgressSection(
         // FIX #8: perf — header row only when the caller wants it. The category detail
         // screen already shows symbol + name in the gradient hero, so the duplicate is
         // suppressed there by passing showHeader = false.
-        if (showHeader) {
-            Row(verticalAlignment = Alignment.CenterVertically) {
-                Txt(cat.symbol, 20, FontWeight.Bold, c.accentA)
-                Spacer(Modifier.width(8.dp))
-                Txt(cat.name, 15, FontWeight.Bold)
+        // Title row + Mastery live in one zero-spacing column so CompactCard's
+        // spacedBy(6.dp) doesn't open a gap between them.
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(0.dp)) {
+            if (showHeader) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Txt(cat.symbol, 20, FontWeight.Bold, c.accentA)
+                    Spacer(Modifier.width(8.dp))
+                    Txt(cat.name, 15, FontWeight.Bold)
+                }
             }
-        }
 
-        // Mastery breakdown (three stacked bars)
-        Column(
-            Modifier.fillMaxWidth().offset(y = (-4).dp), // Pulls the entire block up to close the gap
-            verticalArrangement = Arrangement.spacedBy(6.dp)
-        ) {
-            SectionTitle("Mastery")
-            MasteryBar("Mastered",   mastery.first,    c.success)
-            MasteryBar("Learning",   mastery.second,   c.warning)
-            MasteryBar("Struggling", mastery.third,    c.error)
+            // Mastery breakdown (three stacked bars)
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+                SectionTitle("Mastery")
+                MasteryBar("Mastered",   mastery.first,    c.success)
+                MasteryBar("Learning",   mastery.second,   c.warning)
+                MasteryBar("Struggling", mastery.third,    c.error)
+            }
         }
 
         if (details.isNotEmpty()) {

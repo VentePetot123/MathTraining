@@ -738,6 +738,49 @@ fun ThemeToggle(isDarkMode: Boolean, onClick: () -> Unit, modifier: Modifier = M
     }
 }
 
+// Streak flame drawn in code: outer red→orange flame with a yellow inner core.
+@Composable
+fun FlameIcon(iconSize: Dp, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(iconSize)) {
+        val w = size.width
+        val h = size.height
+
+        val outer = Path().apply {
+            moveTo(w * 0.50f, h * 0.02f)
+            cubicTo(w * 0.55f, h * 0.22f, w * 0.88f, h * 0.38f, w * 0.86f, h * 0.64f)
+            cubicTo(w * 0.85f, h * 0.85f, w * 0.68f, h * 0.98f, w * 0.50f, h * 0.98f)
+            cubicTo(w * 0.32f, h * 0.98f, w * 0.15f, h * 0.85f, w * 0.14f, h * 0.64f)
+            cubicTo(w * 0.13f, h * 0.50f, w * 0.22f, h * 0.40f, w * 0.30f, h * 0.32f)
+            cubicTo(w * 0.30f, h * 0.44f, w * 0.36f, h * 0.50f, w * 0.42f, h * 0.52f)
+            cubicTo(w * 0.38f, h * 0.32f, w * 0.44f, h * 0.14f, w * 0.50f, h * 0.02f)
+            close()
+        }
+        drawPath(
+            outer,
+            Brush.verticalGradient(
+                listOf(Color(0xFFFFB300), Color(0xFFFF5722), Color(0xFFE53935)),
+                startY = 0f, endY = h
+            )
+        )
+
+        val inner = Path().apply {
+            moveTo(w * 0.50f, h * 0.45f)
+            cubicTo(w * 0.58f, h * 0.58f, w * 0.68f, h * 0.66f, w * 0.66f, h * 0.80f)
+            cubicTo(w * 0.64f, h * 0.90f, w * 0.57f, h * 0.95f, w * 0.50f, h * 0.95f)
+            cubicTo(w * 0.43f, h * 0.95f, w * 0.36f, h * 0.90f, w * 0.34f, h * 0.80f)
+            cubicTo(w * 0.32f, h * 0.68f, w * 0.44f, h * 0.60f, w * 0.50f, h * 0.45f)
+            close()
+        }
+        drawPath(
+            inner,
+            Brush.verticalGradient(
+                listOf(Color(0xFFFFF59D), Color(0xFFFFC107)),
+                startY = h * 0.45f, endY = h * 0.95f
+            )
+        )
+    }
+}
+
 @Composable
 fun BackChevron(modifier: Modifier = Modifier, color: Color = Color.White) {
     Canvas(modifier.size(44.dp).padding(13.dp)) {

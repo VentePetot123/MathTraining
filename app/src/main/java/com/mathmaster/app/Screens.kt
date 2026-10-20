@@ -16,6 +16,9 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.requiredWidth
+import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
 import androidx.compose.foundation.layout.Row
@@ -1137,12 +1140,25 @@ fun ResultsScreen(vm: TrainerViewModel) {
     }
     val cat = Categories.byId(r.categoryId)
     val acc = if (r.total > 0) r.score * 100 / r.total else 0
-    var target by remember { mutableFloatStateOf(0f) }
-    LaunchedEffect(Unit) {
-        delay(250)
-        target = acc / 100f
-    }
     val shape = RoundedCornerShape(26.dp)
+
+    // Two separate animations: the hero score, then (after the confetti settles) the bar.
+    val heroP = remember { Animatable(0f) }
+    val barP = remember { Animatable(0f) }
+    LaunchedEffect(Unit) {
+        coroutineScope {
+            launch {
+                delay(300)                                   // confetti starts at ~250ms
+                heroP.animateTo(1f, tween(1000, easing = FastOutSlowInEasing))
+            }
+            launch {
+                delay(3300)                                  // confetti ends at ~2650ms
+                barP.animateTo(1f, tween(1100, easing = FastOutSlowInEasing))
+            }
+        }
+    }
+    val shownScore = (heroP.value * r.score).roundToInt()
+    val shownPct = (heroP.value * acc).roundToInt()
 
     Column(
         Modifier
@@ -1152,7 +1168,7 @@ fun ResultsScreen(vm: TrainerViewModel) {
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        // ---- Hero: category, "Session Complete", score. Confetti bursts inside it. ----
+        // ---- Hero ----
         Box(
             Modifier
                 .fillMaxWidth()
@@ -1165,33 +1181,48 @@ fun ResultsScreen(vm: TrainerViewModel) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.Center
-                ) {
+                Row(verticalAlignment = Alignment.CenterVertically, horizontalArrangement = Arrangement.Center) {
                     Txt(cat.symbol, 28, FontWeight.Bold, Color.White)
                     Spacer(Modifier.width(10.dp))
                     Txt(
                         cat.name, 22, FontWeight.ExtraBold, Color.White,
-                        Modifier.weight(1f, fill = false),
-                        TextAlign.Center, lineHeight = 26
+                        Modifier.weight(1f, fill = false), TextAlign.Center, lineHeight = 26
                     )
                 }
                 Txt("Session Complete", 14, FontWeight.Medium, Color.White.copy(alpha = 0.9f))
-                Txt("${r.score}/${r.total}  ·  $acc%", 40, FontWeight.ExtraBold, Color.White)
+                Txt("$shownScore/${r.total}  ·  $shownPct%", 40, FontWeight.ExtraBold, Color.White)
             }
-            // Fires once, then removes itself
             ConfettiBurst(Modifier.matchParentSize())
         }
 
         // ---- Stats ----
         AppCard {
             SectionTitle("Accuracy")
-            GradientProgressBar(target)
-            Spacer(Modifier.height(2.dp))
-            StatTile("STREAK", "${r.best}", "🔥")
-            StatTile("Improved Questions", "${r.improved}")
-            StatTile("New Questions Introduced", "${r.introduced}")
+            AccuracyBar(fraction = barP.value * acc / 100f, percent = (barP.value * acc).roundToInt())
+
+            Spacer(Modifier.height(4.dp))
+
+            // Streak: no box, front and centre
+            Column(
+                Modifier.fillMaxWidth(),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(0.dp)
+            ) {
+                Text(
+                    "STREAK", color = c.muted, fontSize = 12.sp,
+                    fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp
+                )
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Txt("${r.best}", 48, FontWeight.ExtraBold, c.success, lineHeight = 54)
+                    Spacer(Modifier.width(6.dp))
+                    Txt("🔥", 34)
+                }
+            }
+
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                MiniStat("Breakthroughs", "${r.improved}", Modifier.weight(1f))
+                MiniStat("New Facts", "${r.introduced}", Modifier.weight(1f))
+            }
         }
 
         ReviewSection(r.missed)
@@ -1200,13 +1231,11 @@ fun ResultsScreen(vm: TrainerViewModel) {
         val currentCategory = Categories.all.firstOrNull { it.id == r.categoryId }
         if (currentCategory != null) {
             SoftButton(
-                "View Progress",
-                Modifier.fillMaxWidth(),
+                "View Progress", Modifier.fillMaxWidth(),
                 onClick = { vm.openCategoryDetail(currentCategory, fromResults = true) }
             )
             SoftButton(
-                "Back to Category",
-                Modifier.fillMaxWidth(),
+                "Back to Category", Modifier.fillMaxWidth(),
                 onClick = { vm.openCategory(currentCategory) }
             )
         }
@@ -1214,33 +1243,57 @@ fun ResultsScreen(vm: TrainerViewModel) {
     }
 }
 
-// Centered "LABEL: X" tile; the value is green and the optional suffix (emoji) stays neutral.
+// Small stat: value on top (green), label underneath. Same font family and weights as the rest of the app.
 @Composable
-private fun StatTile(label: String, value: String, suffix: String = "") {
+private fun MiniStat(label: String, value: String, modifier: Modifier = Modifier) {
     val c = AppTheme.colors
-    Box(
+    Column(
+        modifier
+            .clip(RoundedCornerShape(16.dp))
+            .background(c.surfaceAlt)
+            .padding(vertical = 12.dp, horizontal = 8.dp),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(2.dp)
+    ) {
+        Txt(value, 22, FontWeight.ExtraBold, c.success, lineHeight = 26)
+        Txt(label, 12, FontWeight.SemiBold, c.muted, align = TextAlign.Center)
+    }
+}
+
+// Thick accuracy bar with the % centered inside. The text is drawn twice: muted on the track,
+// white on the filled part (clipped to the fill), so it stays readable as the bar passes under it.
+@Composable
+private fun AccuracyBar(fraction: Float, percent: Int) {
+    val c = AppTheme.colors
+    val pill = RoundedCornerShape(50)
+    BoxWithConstraints(
         Modifier
             .fillMaxWidth()
-            .clip(RoundedCornerShape(14.dp))
-            .background(c.surfaceAlt)
-            .padding(vertical = 14.dp, horizontal = 12.dp),
+            .height(38.dp)
+            .clip(pill)
+            .background(c.surfaceAlt),
         contentAlignment = Alignment.Center
     ) {
-        Text(
-            text = buildAnnotatedString {
-                withStyle(SpanStyle(color = c.muted, fontWeight = FontWeight.SemiBold)) {
-                    append("$label: ")
-                }
-                withStyle(SpanStyle(color = c.success, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)) {
-                    append(value)
-                }
-                if (suffix.isNotEmpty()) {
-                    withStyle(SpanStyle(color = c.onBackground)) { append(" $suffix") }
-                }
-            },
-            fontSize = 15.sp,
-            textAlign = TextAlign.Center
-        )
+        val fullWidth = maxWidth
+        Text("$percent%", color = c.muted, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+
+        Box(
+            Modifier
+                .fillMaxHeight()
+                .fillMaxWidth(fraction.coerceIn(0f, 1f))
+                .align(Alignment.CenterStart)
+                .clip(pill)
+        ) {
+            Box(
+                Modifier
+                    .requiredWidth(fullWidth)
+                    .fillMaxHeight()
+                    .background(c.accent),
+                contentAlignment = Alignment.Center
+            ) {
+                Text("$percent%", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+            }
+        }
     }
 }
 
@@ -1550,14 +1603,19 @@ fun CategoryProgressSection(
         MasteryBar("Struggling", mastery.third,    c.error)
 
         if (details.isNotEmpty()) {
-            SectionTitle("All Time Best")
-            val (strongTxt, weakTxt) = remember(mastery, details) { summarize(mastery, details) }
-            Row(
-                Modifier.fillMaxWidth(),
-                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            Column(
+                Modifier.fillMaxWidth().padding(vertical = 12.dp),
+                verticalArrangement = Arrangement.spacedBy(12.dp)
             ) {
-                HighlightBox("Best Strength", strongTxt, c.success, Modifier.weight(1f))
-                HighlightBox("Worst Weakness", weakTxt, c.error, Modifier.weight(1f), broken = true)
+                SectionTitle("All Time Best")
+                val (strongTxt, weakTxt) = remember(mastery, details) { summarize(mastery, details) }
+                Row(
+                    Modifier.fillMaxWidth(),
+                    horizontalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    HighlightBox("Best Strength", strongTxt, c.success, Modifier.weight(1f))
+                    HighlightBox("Worst Weakness", weakTxt, c.error, Modifier.weight(1f), broken = true)
+                }
             }
         }
 

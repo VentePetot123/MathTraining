@@ -737,8 +737,28 @@ private fun ProgressBarRow(sessionId: Long, answered: Int, total: Int) {
     }
 }
 
+// Counts up under the answer box; the last 10 seconds turn into a yellow countdown.
 @Composable
-fun QuestionCard(u: UiSession, onShown: () -> Unit = {}) {
+private fun LiveTimer(startedAt: Long, limitSec: Int) {
+    val c = AppTheme.colors
+    var sec by remember(startedAt) { mutableIntStateOf(0) }
+    LaunchedEffect(startedAt) {
+        if (startedAt == 0L) return@LaunchedEffect
+        while (true) {
+            sec = ((android.os.SystemClock.elapsedRealtime() - startedAt) / 1000L).toInt().coerceAtMost(limitSec)
+            delay(200)
+        }
+    }
+    val left = limitSec - sec
+    if (startedAt != 0L && left <= 10) {
+        Txt("Time left: $left s", 11, FontWeight.Bold, c.warning)
+    } else {
+        Txt("Time: $sec s", 10, FontWeight.Medium, c.accentA)
+    }
+}
+
+@Composable
+fun QuestionCard(u: UiSession, startedAt: Long = 0L, onShown: () -> Unit = {}) {
     val c = AppTheme.colors
     val fact = u.fact ?: return
     val shape = RoundedCornerShape(26.dp)
@@ -874,15 +894,21 @@ fun QuestionCard(u: UiSession, onShown: () -> Unit = {}) {
         Box(Modifier.fillMaxWidth().heightIn(min = 46.dp), contentAlignment = Alignment.Center) {
             when (u.feedback) {
                 Feedback.None -> {
-                    if (u.hint != null) {
-                        Txt(
-                            text = u.hint, 
-                            size = 14, 
-                            weight = FontWeight.Medium, 
-                            color = c.warning, 
-                            modifier = Modifier.fillMaxWidth(), 
-                            align = TextAlign.Center
-                        )
+                    Column(
+                        horizontalAlignment = Alignment.CenterHorizontally,
+                        verticalArrangement = Arrangement.spacedBy(2.dp)
+                    ) {
+                        if (u.hint != null) {
+                            Txt(
+                                text = u.hint, 
+                                size = 14, 
+                                weight = FontWeight.Medium, 
+                                color = c.warning, 
+                                modifier = Modifier.fillMaxWidth(), 
+                                align = TextAlign.Center
+                            )
+                        }
+                        LiveTimer(startedAt, 120)
                     }
                 }
                 else -> {
@@ -910,8 +936,9 @@ fun QuestionCard(u: UiSession, onShown: () -> Unit = {}) {
                             Spacer(Modifier.size(22.dp))   // <-- new line: mirrors the check/cross mark
                         }
                         Txt(
-                            "Time: " + String.format(Locale.US, "%.1f", u.lastMs / 1000.0) + " sec",
-                            10, FontWeight.Medium, c.accentA
+                            if (u.timedOut) "Time's up! (120 sec limit)"
+                            else "Time: " + String.format(Locale.US, "%.1f", u.lastMs / 1000.0) + " sec",
+                            10, FontWeight.Medium, if (u.timedOut) c.warning else c.accentA
                         )
                     }
                 }
@@ -1435,8 +1462,13 @@ fun CategoryProgressSection(
         if (details.isNotEmpty()) {
             SectionTitle("All Time Best")
             val (strongTxt, weakTxt) = remember(mastery, details) { summarize(mastery, details) }
-            HighlightBox("Best Strength", strongTxt, c.success)
-            HighlightBox("Worse Weakness", weakTxt, c.error)
+            Row(
+                Modifier.fillMaxWidth(),
+                horizontalArrangement = Arrangement.spacedBy(8.dp)
+            ) {
+                HighlightBox("Best Strength", strongTxt, c.success, Modifier.weight(1f))
+                HighlightBox("Worse Weakness", weakTxt, c.error, Modifier.weight(1f))
+            }
         }
 
         if (detailed) {
@@ -1458,10 +1490,19 @@ fun CategoryProgressSection(
                     )
             }
 
-            // RankTable already checks for empty lists internally and returns nothing, 
-            // so we don't need manual empty state checks here.
-            RankTable("Strength List", sortedByCorrect, strong = true)
-            RankTable("Weakness List", sortedByWrong, strong = false)
+            if (sortedByCorrect.isEmpty()) {
+                SectionTitle("Strength List")
+                Txt("No Data", 14, FontWeight.Medium, Color.White, Modifier.fillMaxWidth().padding(vertical = 8.dp), TextAlign.Center)
+            } else {
+                RankTable("Strength List", sortedByCorrect, strong = true)
+            }
+
+            if (sortedByWrong.isEmpty()) {
+                SectionTitle("Weakness List")
+                Txt("No Data", 14, FontWeight.Medium, Color.White, Modifier.fillMaxWidth().padding(vertical = 8.dp), TextAlign.Center)
+            } else {
+                RankTable("Weakness List", sortedByWrong, strong = false)
+            }
         }
     }
 }

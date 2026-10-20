@@ -16,6 +16,7 @@ import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
 
 enum class Screen { Loading, Menu, Range, Training, Results, Progress, CategoryDetail }
+enum class ThemeMode { System, Light, Dark }
 enum class Feedback { None, Correct, Wrong }
 
 data class UiSession(
@@ -98,6 +99,17 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     // the user's mute choice survives app restarts.
     var soundEnabled by mutableStateOf(store.isSoundEnabled())
         private set
+    var themeMode by mutableStateOf(
+        runCatching { ThemeMode.valueOf(store.getThemeMode()) }.getOrDefault(ThemeMode.System)
+    )
+        private set
+
+    /** Pass the *effective* dark state so "System" mode flips to the opposite. */
+    fun toggleTheme(currentlyDark: Boolean) {
+        themeMode = if (currentlyDark) ThemeMode.Light else ThemeMode.Dark
+        store.setThemeMode(themeMode.name)
+    }
+
     fun toggleSound() {
         soundEnabled = !soundEnabled
         // FIX #8 — no confirmation sound on toggle. The icon change (waves vs X)

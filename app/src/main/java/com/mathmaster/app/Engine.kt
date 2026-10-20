@@ -243,6 +243,8 @@ class Store(context: Context) {
         totalsDirty = true
     }
     fun isSoundEnabled(): Boolean = prefs.getBoolean("sound_enabled", true)
+    fun getThemeMode(): String = prefs.getString("theme_mode", "System") ?: "System"
+    fun setThemeMode(name: String) { prefs.edit().putString("theme_mode", name).apply() }
     fun setSoundEnabled(on: Boolean) { prefs.edit().putBoolean("sound_enabled", on).apply() }
 }
 

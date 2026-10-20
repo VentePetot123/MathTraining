@@ -170,7 +170,7 @@ fun MenuScreen(vm: TrainerViewModel) {
         // FIX #8 — add `contentType` to each item so Compose can reuse slots when
         // scrolling. Without this, every recycled card forces a full recomposition
         // because Compose can't tell "this slot previously held a category card".
-        item(key = "title", span = { GridItemSpan(maxLineSpan) }, contentType = "title") { MenuTitle() }
+        item(key = "title", span = { GridItemSpan(maxLineSpan) }, contentType = "title") { MenuTitle(vm) }
         item(key = "progress", span = { GridItemSpan(maxLineSpan) }, contentType = "progress") {
             MenuHeader(vm) { vm.openProgress() }
         }
@@ -187,21 +187,29 @@ fun MenuScreen(vm: TrainerViewModel) {
 }
 
 @Composable
-fun MenuTitle() {
+fun MenuTitle(vm: TrainerViewModel) {
     val c = AppTheme.colors
-    // FIX #8 — center the logo and title together. Uses Row(Center) to horizontally
-    // center the logo+column group, then the Column itself is left-aligned so the
-    // tagline reads cleanly under the title.
     Row(
         Modifier.fillMaxWidth().padding(top = 4.dp),
         verticalAlignment = Alignment.CenterVertically,
-        horizontalArrangement = Arrangement.Center
+        horizontalArrangement = Arrangement.SpaceBetween
     ) {
-        LogoMark(46.dp)
-        Spacer(Modifier.width(12.dp))
-        Column {
-            Txt("Math Master", 28, FontWeight.ExtraBold, c.onBackground, lineHeight = 30)
-            Txt("Train your mind. Adaptively.", 12, FontWeight.Medium, c.muted)
+        // Far left: logo + title
+        Row(verticalAlignment = Alignment.CenterVertically) {
+            LogoMark(46.dp)
+            Spacer(Modifier.width(12.dp))
+            Column {
+                Txt("Math Master", 24, FontWeight.ExtraBold, c.onBackground, lineHeight = 28)
+                Txt("Train your mind. Adaptively.", 11, FontWeight.Medium, c.muted)
+            }
+        }
+        // Far right: theme + sound toggles
+        Row(
+            verticalAlignment = Alignment.CenterVertically,
+            horizontalArrangement = Arrangement.spacedBy(8.dp)
+        ) {
+            ThemeToggle(isDarkMode = c.isDark, onClick = { vm.toggleTheme(c.isDark) })
+            SoundToggle(vm.soundEnabled, { vm.toggleSound() })
         }
     }
 }
@@ -574,7 +582,7 @@ private fun ReviewSection(missed: List<String>) {
     val c = AppTheme.colors
     var expanded by remember { mutableStateOf(false) }
     val shown = if (expanded) missed else missed.take(3)
-    val line = Color.White.copy(alpha = 0.14f)
+    val line = c.muted.copy(alpha = 0.25f)
 
     AppCard {
         SectionTitle("To Review")
@@ -1494,14 +1502,14 @@ fun CategoryProgressSection(
 
             if (sortedByCorrect.isEmpty()) {
                 SectionTitle("Strength List")
-                Txt("No Data", 14, FontWeight.Medium, Color.White, Modifier.fillMaxWidth().padding(vertical = 8.dp), TextAlign.Center)
+                Txt("No Data", 14, FontWeight.Medium, c.muted, Modifier.fillMaxWidth().padding(vertical = 8.dp), TextAlign.Center)
             } else {
                 RankTable("Strength List", sortedByCorrect, strong = true)
             }
 
             if (sortedByWrong.isEmpty()) {
                 SectionTitle("Weakness List")
-                Txt("No Data", 14, FontWeight.Medium, Color.White, Modifier.fillMaxWidth().padding(vertical = 8.dp), TextAlign.Center)
+                Txt("No Data", 14, FontWeight.Medium, c.muted, Modifier.fillMaxWidth().padding(vertical = 8.dp), TextAlign.Center)
             } else {
                 RankTable("Weakness List", sortedByWrong, strong = false)
             }

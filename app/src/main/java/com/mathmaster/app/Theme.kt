@@ -69,7 +69,12 @@ object AppTheme {
 }
 
 @Composable
-fun MathTheme(darkTheme: Boolean = isSystemInDarkTheme(), content: @Composable () -> Unit) {
+fun MathTheme(themeMode: ThemeMode = ThemeMode.System, content: @Composable () -> Unit) {
+    val darkTheme = when (themeMode) {
+        ThemeMode.System -> isSystemInDarkTheme()
+        ThemeMode.Light -> false
+        ThemeMode.Dark -> true
+    }
     val c = if (darkTheme) DarkColors else LightColors
     val scheme = if (darkTheme) {
         darkColorScheme(

@@ -67,6 +67,8 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
+import androidx.compose.ui.geometry.Rect
+import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.Path
@@ -642,7 +644,58 @@ fun SoundToggle(enabled: Boolean, onClick: () -> Unit, modifier: Modifier = Modi
     }
 }
 
-// Back arrow drawn in code so it is exactly centered in its 44dp box on every device.
+// Sun when dark (tap → light), crescent moon when light (tap → dark). Drawn in code.
+@Composable
+fun ThemeToggle(isDarkMode: Boolean, onClick: () -> Unit, modifier: Modifier = Modifier) {
+    val c = AppTheme.colors
+    val tint by animateColorAsState(
+        targetValue = if (isDarkMode) c.warning else c.accentA,
+        animationSpec = tween(200),
+        label = "themeTint"
+    )
+    val bg = tint.copy(alpha = 0.16f)
+
+    Box(
+        modifier
+            .size(44.dp)
+            .bounceClick(CircleShape, 0.dp, onClick = onClick)
+            .background(bg, CircleShape),
+        contentAlignment = Alignment.Center
+    ) {
+        Canvas(Modifier.size(22.dp)) {
+            val w = size.width
+            val cx = w * 0.5f
+            val cy = w * 0.5f
+            if (isDarkMode) {
+                // Sun: core disc + 8 rays
+                drawCircle(tint, w * 0.20f, Offset(cx, cy))
+                val sw = w * 0.09f
+                for (i in 0 until 8) {
+                    val a = Math.PI / 4 * i
+                    val c0 = w * 0.32f
+                    val c1 = w * 0.46f
+                    drawLine(
+                        tint,
+                        Offset(cx + (Math.cos(a) * c0).toFloat(), cy + (Math.sin(a) * c0).toFloat()),
+                        Offset(cx + (Math.cos(a) * c1).toFloat(), cy + (Math.sin(a) * c1).toFloat()),
+                        sw, StrokeCap.Round
+                    )
+                }
+            } else {
+                // Moon: big disc minus an offset disc = crescent
+                val outer = Path().apply {
+                    addOval(Rect(Offset(cx, cy), w * 0.36f))
+                }
+                val cut = Path().apply {
+                    addOval(Rect(Offset(w * 0.66f, w * 0.36f), w * 0.30f))
+                }
+                val moon = Path.combine(PathOperation.Difference, outer, cut)
+                drawPath(moon, tint)
+            }
+        }
+    }
+}
+
 @Composable
 fun BackChevron(modifier: Modifier = Modifier, color: Color = Color.White) {
     Canvas(modifier.size(44.dp).padding(13.dp)) {

@@ -181,7 +181,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     private var timeoutJob: Job? = null
     var questionStartedAt by mutableLongStateOf(0L)
         private set
-    var liveTick by mutableStateOf(0L)
+    var liveTickMs by mutableStateOf(0L)
         private set
 
     // ---------- startup ----------
@@ -568,7 +568,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         // let the UI signal back when it's ready (see `onQuestionShown`).
         rt.startedAt = 0L
         questionStartedAt = 0L
-        liveTick = 0L
+        liveTickMs = 0L
         timeoutJob?.cancel()
         ui = u.copy(fact = f, input = "", feedback = Feedback.None, hint = null, seq = u.seq + 1, timedOut = false)
     }
@@ -587,10 +587,10 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         timeoutJob = viewModelScope.launch {
             while (true) {
                 val elapsed = SystemClock.elapsedRealtime() - started
-                liveTick = elapsed / 1000L
+                liveTickMs = elapsed
                 val left = QUESTION_LIMIT_MS - elapsed
                 if (left <= 0L) break
-                delay(minOf(left, 200L))
+                delay(minOf(left, 50L)) // Update every 50ms for smooth decimal counting
             }
             timeUp(seq)
         }

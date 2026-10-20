@@ -247,6 +247,7 @@ fun SoftButton(
 // (Number range + Questions) fit on-screen with no vertical scroll.
 @Composable
 fun CompactCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val c = AppTheme.colors
     val shape = RoundedCornerShape(18.dp)
     Column(
         modifier
@@ -257,7 +258,8 @@ fun CompactCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.
                 spotColor = Color.Black.copy(alpha = 0.12f)
             )
             .clip(shape)
-            .background(AppTheme.colors.surface)
+            .background(c.surface)
+            .border(1.dp, c.borderColor, shape)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
         content = content
@@ -266,6 +268,7 @@ fun CompactCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.
 
 @Composable
 fun AppCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
+    val c = AppTheme.colors
     val shape = RoundedCornerShape(22.dp)
     Column(
         modifier
@@ -276,7 +279,8 @@ fun AppCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -
                 spotColor = Color.Black.copy(alpha = 0.15f)
             )
             .clip(shape)
-            .background(AppTheme.colors.surface)
+            .background(c.surface)
+            .border(1.dp, c.borderColor, shape)
             .padding(18.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         content = content

@@ -611,13 +611,13 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
 
         val problem = Grading.check(f, u.input)
         if (problem != null) {
-            ui = u.copy(hint = problem)
+            ui = u.copy(input = "", hint = problem)
             return
         }
 
         val verdict = Grading.grade(f, u.input)
         if (verdict == null) {
-            ui = u.copy(hint = "Check the answer format")
+            ui = u.copy(input = "", hint = "Check the answer format")
             return
         }
         // FIX #8 — guard against a zero timer (user submits before animation done).

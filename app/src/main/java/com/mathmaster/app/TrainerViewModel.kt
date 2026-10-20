@@ -571,11 +571,21 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         if (u.feedback != Feedback.None) return
         if (u.input.length >= 160) return
         val kind = u.fact?.kind
+        
+        // Only the symbols that belong to this question type can be typed.
         if (k == "." && kind != Kind.DEC && kind != Kind.PCT) return
         if (k == "/" && kind != Kind.FRAC) return
         if (k == "%" && kind != Kind.PCT) return
+        
+        // Each of . / % at most once; extra presses are ignored.
         if ((k == "." || k == "/" || k == "%") && u.input.contains(k)) return
+        
+        // For percentages, the decimal point must come BEFORE the % sign.
+        if (k == "." && u.input.endsWith("%")) return
+        
+        // "-" only as the very first character (Integers).
         if (k == "-" && u.input.isNotEmpty()) return
+        
         ui = u.copy(input = u.input + k, hint = null)
     }
 

@@ -67,6 +67,7 @@ import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
+import androidx.compose.ui.layout.LastBaseline
 import androidx.compose.ui.text.SpanStyle
 import androidx.compose.ui.text.buildAnnotatedString
 import androidx.compose.ui.text.font.FontStyle
@@ -264,17 +265,11 @@ fun MenuHeader(vm: TrainerViewModel, onOpenProgress: () -> Unit) {
             // FIX #8 — Always show the actual numbers, even at zero. Previously we showed
             // "Your progress will appear here" until the user practiced, which hid the
             // fact that the counters existed. Now the row is visible from the first launch.
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(4.dp)
-            ) {
-                Txt(
-                    "${t.answers} Answers · ${t.sessions} Sessions · Best Streak ${t.bestStreak}",
-                    12, FontWeight.Medium, Color.White.copy(alpha = 0.85f),
-                    modifier = Modifier.weight(1f, fill = false)
-                )
-                FlameIcon(14.dp)
-            }
+            TextWithFlame(
+                "${t.answers} Answers · ${t.sessions} Sessions · Best Streak ${t.bestStreak}",
+                12, FontWeight.Medium, Color.White.copy(alpha = 0.85f),
+                flameSize = 14.dp
+            )
         }
         ProgressGlyph()
     }
@@ -779,13 +774,11 @@ private fun HeaderBar(
         Spacer(Modifier.width(12.dp))
         Column(horizontalAlignment = Alignment.End) {
             Txt("Q ${minOf(answered + 1, total)}/$total", 17, FontWeight.Bold)
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(3.dp)
-            ) {
-                Txt("Score $score · Streak $streak", 12, FontWeight.Medium, c.muted)
-                FlameIcon(13.dp)
-            }
+            TextWithFlame(
+                "Score $score · Streak $streak",
+                12, FontWeight.Medium, c.muted,
+                flameSize = 13.dp
+            )
         }
     }
 }
@@ -1255,35 +1248,22 @@ fun ResultsScreen(vm: TrainerViewModel) {
                 suffix = "s" // Add an 's' to show seconds
             )
 
-            // Streak: mathematically centered using a Box and baseline alignment
-            Box(
+            // Streak: label + number/flame, both centered, trimmed to visible bounds
+            Column(
                 Modifier.fillMaxWidth(),
-                contentAlignment = Alignment.Center
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Column(
-                    horizontalAlignment = Alignment.CenterHorizontally
-                ) {
-                    Text(
-                        "STREAK", color = c.muted, fontSize = 12.sp,
-                        fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp,
-                        lineHeight = 12.sp
-                    )
-                    Row(
-                        Modifier.fillMaxWidth(),
-                        horizontalArrangement = Arrangement.Center,
-                        verticalAlignment = Alignment.CenterVertically
-                    ) {
-                        Txt("${r.best}", 48, FontWeight.ExtraBold, c.success, lineHeight = 48)
-                        Spacer(Modifier.width(4.dp))
-                        Box(Modifier.alignByBaseline()) {
-                            FlameIcon(38.dp)
-                        }
-                    }
-                }
+                Text(
+                    "STREAK", color = c.muted, fontSize = 12.sp,
+                    fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp,
+                    lineHeight = 12.sp
+                )
+                TextWithFlame(
+                    "${r.best}", 48, FontWeight.ExtraBold, c.success,
+                    flameSize = 38.dp, gap = 6.dp
+                )
             }
-
-            // Added spacing here to give the streak number room to breathe
-            Spacer(Modifier.height(12.dp))
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 MiniStat("Breakthroughs", "${r.improved}", Modifier.weight(1f))
@@ -1710,10 +1690,16 @@ fun CategoryProgressSection(
         // spacedBy(6.dp) doesn't open a gap between them.
         Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(0.dp)) {
             if (showHeader) {
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Txt(cat.symbol, 20, FontWeight.Bold, c.accentA)
+                Row {
+                    Txt(
+                        cat.symbol, 20, FontWeight.Bold, c.accentA,
+                        modifier = Modifier.alignBy(LastBaseline)
+                    )
                     Spacer(Modifier.width(8.dp))
-                    Txt(cat.name, 15, FontWeight.Bold)
+                    Txt(
+                        cat.name, 15, FontWeight.Bold,
+                        modifier = Modifier.alignBy(LastBaseline)
+                    )
                 }
             }
 

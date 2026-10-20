@@ -374,22 +374,26 @@ fun RangeScreen(vm: TrainerViewModel) {
                     .background(c.accentA.copy(alpha = 0.10f))
                     .border(1.dp, c.accentA.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
                     .padding(horizontal = 14.dp, vertical = 14.dp),
-                horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 // Centered Title
-                Row(
-                    verticalAlignment = Alignment.CenterVertically,
-                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                Box(
+                    Modifier.fillMaxWidth(),
+                    contentAlignment = Alignment.Center
                 ) {
-                    Txt("ⓘ", 16, FontWeight.Bold, c.accentA)
-                    Text(
-                        text = "ROUNDING RULE",
-                        color = c.accentA,
-                        fontSize = 12.sp,
-                        fontWeight = FontWeight.ExtraBold,
-                        letterSpacing = 1.5.sp
-                    )
+                    Row(
+                        verticalAlignment = Alignment.CenterVertically,
+                        horizontalArrangement = Arrangement.spacedBy(6.dp)
+                    ) {
+                        Txt("ⓘ", 16, FontWeight.Bold, c.accentA)
+                        Text(
+                            text = "ROUNDING RULE",
+                            color = c.accentA,
+                            fontSize = 12.sp,
+                            fontWeight = FontWeight.ExtraBold,
+                            letterSpacing = 1.5.sp
+                        )
+                    }
                 }
 
                 // Content
@@ -1398,24 +1402,15 @@ fun CategoryProgressSection(
         MasteryBar("Learning",   mastery.second,   c.warning)
         MasteryBar("Struggling", mastery.third,    c.error)
 
-        // FIX #8: perf — summarize() allocates strings; cache on (mastery, details).
+        SectionTitle("All Time Best")
         val (strongTxt, weakTxt) = remember(mastery, details) { summarize(mastery, details) }
         HighlightBox("Best Strength", strongTxt, c.success)
         HighlightBox("Worse Weakness", weakTxt, c.error)
 
-        // FIX #8 — `detailed` gate: charts + detailed lists are shown only when the
-        // caller opts in. Progress Dashboard (grid of cards) passes detailed = false
-        // to keep cards compact — those details are available on CategoryDetailScreen
-        // (which passes detailed = true). This halves per-card composition cost on
-        // the dashboard, and makes the card visually read as a summary.
         if (detailed) {
-            // Trend chart (empty state handled inside)
+            SectionTitle("Accuracy & Speed Chart")
             TrendChart(history)
 
-            // FIX #8: perf — partition into mutually exclusive buckets so the SAME
-            // fact can never appear in both Strengths and Weaknesses.
-            //   • strengths  = facts where correct > incorrect
-            //   • weaknesses = facts where incorrect >= correct
             val sortedByCorrect = remember(details) {
                 details.filter { it.correct > it.incorrect }
                     .sortedWith(
@@ -1431,8 +1426,20 @@ fun CategoryProgressSection(
                     )
             }
 
-            RankTable("Strength List", sortedByCorrect, strong = true)
-            RankTable("Weakness List", sortedByWrong, strong = false)
+            // FIX: Only show table if data exists, otherwise show "No Data"
+            if (sortedByCorrect.isEmpty()) {
+                SectionTitle("Strength List")
+                Txt("No Data", 14, FontWeight.Medium, Color.White, Modifier.fillMaxWidth().padding(vertical = 8.dp), TextAlign.Center)
+            } else {
+                RankTable("Strength List", sortedByCorrect, strong = true)
+            }
+
+            if (sortedByWrong.isEmpty()) {
+                SectionTitle("Weakness List")
+                Txt("No Data", 14, FontWeight.Medium, Color.White, Modifier.fillMaxWidth().padding(vertical = 8.dp), TextAlign.Center)
+            } else {
+                RankTable("Weakness List", sortedByWrong, strong = false)
+            }
         }
     }
 }
@@ -1465,12 +1472,6 @@ private fun summarize(
     mastery: Triple<Int, Int, Int>,
     details: List<AdaptiveEngine.FactDetail>
 ): Pair<String, String> {
-    if (details.isEmpty()) return "No data yet" to "No data yet"
-
-    // FIX #8 — partition into mutually exclusive buckets so the SAME fact can never
-    // appear in both "strong on" and "weak on". This mirrors the partitioning used
-    // by the detailed lists: strengths are net-positive facts, weaknesses are
-    // net-neutral-or-negative facts.
     val netPositive = details.filter { it.correct > it.incorrect }
     val netNegative = details.filter { it.incorrect > 0 && it.incorrect >= it.correct }
 

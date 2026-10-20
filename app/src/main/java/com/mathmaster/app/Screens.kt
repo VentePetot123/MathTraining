@@ -1221,8 +1221,8 @@ fun ResultsScreen(vm: TrainerViewModel) {
             
             // ---- Time/Answer Bar ----
             SectionTitle("Time/Answer")
-            // Calculate average time (in seconds) based on the session runtime
-            val avgTimeMs = (vm.runtime?.totalMs ?: 0L) / r.total.coerceAtLeast(1)
+            // Read the average time safely from the ResultsUi object
+            val avgTimeMs = r.avgMs.toLong()
             val avgTimeSec = avgTimeMs / 1000f
             // Normalize the time for the bar (e.g., 0s = 0%, 120s = 100%)
             val timeFraction = (avgTimeSec / 120f).coerceIn(0f, 1f)

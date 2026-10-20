@@ -5,6 +5,7 @@ import android.os.SystemClock
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.mutableLongStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
@@ -30,7 +31,8 @@ data class UiSession(
     val feedback: Feedback = Feedback.None,
     val seq: Int = 0,
     val lastMs: Long = 0L,
-    val hint: String? = null
+    val hint: String? = null,
+    val timedOut: Boolean = false
 )
 
 data class ResultsUi(
@@ -54,6 +56,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         // destination screen never calls `arrivedAt(gen)`. 1500ms is well above any
         // transition (240ms) plus settle time, so it only fires as a failsafe.
         private const val NAV_TIMEOUT_MS = 1500L
+        private const val QUESTION_LIMIT_MS = 120_000L
     }
 
     private val store = Store(app)
@@ -163,6 +166,9 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
 
     private var runtime: SessionRuntime? = null
     private var advanceJob: Job? = null
+    private var timeoutJob: Job? = null
+    var questionStartedAt by mutableLongStateOf(0L)
+        private set
 
     // ---------- startup ----------
     suspend fun preload() = withContext(Dispatchers.Default) {
@@ -341,6 +347,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         // and nextQuestion's guard returns silently — but the user is now on Menu
         // with a dangling runtime.
         advanceJob?.cancel()
+        timeoutJob?.cancel()
         countdown = null
 
         val navigated = navigateTo(Screen.Menu) {
@@ -361,6 +368,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         // of the main Menu. This lets the user immediately start another session of
         // the same category without re-navigating through the menu.
         advanceJob?.cancel()
+        timeoutJob?.cancel()
         countdown = null
         showQuit = false
         engine.flush()
@@ -482,6 +490,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         if (screen != Screen.Range && screen != Screen.Results && screen != Screen.CategoryDetail) return
 
         advanceJob?.cancel()
+        timeoutJob?.cancel()
         val c = selected
         val facts = factsFor(c, rangeMin, rangeMax)
         if (facts.isEmpty()) return
@@ -544,7 +553,9 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         // for the 380ms entrance animation. Instead, we reset the timer to 0 and
         // let the UI signal back when it's ready (see `onQuestionShown`).
         rt.startedAt = 0L
-        ui = u.copy(fact = f, input = "", feedback = Feedback.None, hint = null, seq = u.seq + 1)
+        questionStartedAt = 0L
+        timeoutJob?.cancel()
+        ui = u.copy(fact = f, input = "", feedback = Feedback.None, hint = null, seq = u.seq + 1, timedOut = false)
     }
 
     // FIX #8 — called by the UI once the entrance animation completes. Starts the
@@ -552,8 +563,19 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     // response time, not the card animation.
     fun onQuestionShown() {
         val rt = runtime ?: return
-        if (rt.startedAt == 0L) {
-            rt.startedAt = SystemClock.elapsedRealtime()
+        if (rt.startedAt != 0L) return
+        val started = SystemClock.elapsedRealtime()
+        rt.startedAt = started
+        questionStartedAt = started
+        val seq = ui?.seq ?: return
+        timeoutJob?.cancel()
+        timeoutJob = viewModelScope.launch {
+            while (true) {
+                val left = QUESTION_LIMIT_MS - (SystemClock.elapsedRealtime() - started)
+                if (left <= 0L) break
+                delay(minOf(left, 1000L))
+            }
+            timeUp(seq)
         }
     }
 
@@ -601,6 +623,53 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         if (u.feedback != Feedback.None) return
         if (u.input.isEmpty()) return
         ui = u.copy(input = "", hint = null)
+    }
+
+    private fun timeUp(seq: Int) {
+        val u = ui ?: return
+        val f = u.fact ?: return
+        val rt = runtime ?: return
+        if (screen != Screen.Training || u.seq != seq || u.feedback != Feedback.None) return
+        
+        timeoutJob?.cancel()
+        val ms = QUESTION_LIMIT_MS
+        rt.totalMs += ms
+        rt.answerCount++
+        val out = engine.record(u.categoryId, f, false, ms.toDouble())
+        engine.introduceIfReady(u.categoryId, rt)
+
+        if (out.improved) rt.improved++
+        if (out.requeue) {
+            rt.queue.add(f to (u.answered + 1 + (3..6).random()))
+            if (rt.queue.size > 32) rt.queue.removeAt(0)
+        }
+        rt.missed[f.key] = f
+
+        if (soundEnabled) {
+            soundManager.playWrong()
+        }
+
+        ui = u.copy(
+            answered = u.answered + 1,
+            score = u.score,
+            streak = 0,
+            best = maxOf(u.best, 0),
+            feedback = Feedback.Wrong,
+            lastMs = ms,
+            hint = null,
+            timedOut = true
+        )
+        if ((u.answered + 1) % 5 == 0) {
+            viewModelScope.launch(Dispatchers.IO) { engine.flush() }
+        }
+
+        advanceJob?.cancel()
+        advanceJob = viewModelScope.launch {
+            val answerLen = f.answer.length
+            val delayMs = (1900L + 60L * answerLen).coerceAtMost(6000L)
+            delay(delayMs)
+            if (screen == Screen.Training) nextQuestion()
+        }
     }
 
     fun submit() {
@@ -653,6 +722,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
             if (verdict) soundManager.playCorrect() else soundManager.playWrong()
         }
 
+        timeoutJob?.cancel()
         ui = u.copy(
             answered = u.answered + 1,
             score = u.score + if (verdict) 1 else 0,
@@ -672,6 +742,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         }
 
         advanceJob?.cancel()
+        timeoutJob?.cancel()
         advanceJob = viewModelScope.launch {
             // FIX #8 — dynamic delay based on answer length.
             //  • Correct: 900ms base + 40ms per character (cap at ~2.5s). Correct

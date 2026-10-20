@@ -383,6 +383,18 @@ fun RangeScreen(vm: TrainerViewModel) {
             BackChevron()
         }
 
+        // Extra gap so a tap meant for the header/back target can't land on the toggles
+        Spacer(Modifier.height(4.dp))
+        Row(
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.End,
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            ThemeToggle(isDarkMode = c.isDark, onClick = { vm.toggleTheme(c.isDark) })
+            Spacer(Modifier.width(8.dp))
+            SoundToggle(vm.soundEnabled, { vm.toggleSound() })
+        }
+
         // Rounding rule — shown first so it can't be missed (Fractions/Decimals/% only)
         if (cat.id == "fdp") {
             Column(
@@ -654,7 +666,9 @@ fun TrainingScreen(vm: TrainerViewModel) {
                 streak = u.streak,
                 onQuit = { vm.showQuit = true },
                 soundEnabled = vm.soundEnabled,
-                onToggleSound = { vm.toggleSound() }
+                onToggleSound = { vm.toggleSound() },
+                isDarkMode = c.isDark,
+                onToggleTheme = { vm.toggleTheme(c.isDark) }
             )
 
             ProgressBarRow(
@@ -668,10 +682,15 @@ fun TrainingScreen(vm: TrainerViewModel) {
                     .weight(1f)
                     .fillMaxWidth()
                     .zIndex(1f)
-                    .padding(horizontal = 16.dp, vertical = 24.dp) // <-- Increased vertical padding
+                    .padding(horizontal = 4.dp)
             ) {
                 Column(
-                    Modifier.align(Alignment.TopCenter).padding(top = 8.dp, bottom = 16.dp).verticalScroll(rememberScrollState())
+                    Modifier
+                        .align(Alignment.TopCenter)
+                        .fillMaxWidth()
+                        .verticalScroll(rememberScrollState())
+                        // Padding AFTER verticalScroll = inside the clip, so the shadow has room to draw
+                        .padding(horizontal = 12.dp, vertical = 24.dp)
                 ) {
                     // FIX #8: perf — the question card re-renders only when its own
                     // fields change. The keypad's `enabled` value is passed in as a
@@ -681,7 +700,7 @@ fun TrainingScreen(vm: TrainerViewModel) {
                         // the entrance animation finishes (see LaunchedEffect inside
                         // QuestionCard). This ensures the timer measures only the
                         // user's thinking time, not the animation duration.
-                        QuestionCard(u) { vm.onQuestionShown() }
+                        QuestionCard(u, liveTick = vm.liveTick) { vm.onQuestionShown() }
                     }
                 }
             }
@@ -728,10 +747,10 @@ private fun HeaderBar(
     score: Int,
     streak: Int,
     onQuit: () -> Unit,
-    // FIX #8 — sound state and toggle passed as params so HeaderBar stays a pure
-    // composable (no VM dependency). The parent TrainingScreen handles the call.
     soundEnabled: Boolean = true,
-    onToggleSound: () -> Unit = {}
+    onToggleSound: () -> Unit = {},
+    isDarkMode: Boolean = false,
+    onToggleTheme: () -> Unit = {}
 ) {
     val c = AppTheme.colors
     Row(
@@ -740,8 +759,8 @@ private fun HeaderBar(
     ) {
         SoftButton("✕ Quit", size = 14, onClick = onQuit)
         Spacer(Modifier.weight(1f))
-        // FIX #8 — sound toggle now sits on the right, grouped with the session
-        // status. Custom-drawn speaker icon ensures identical look across devices.
+        ThemeToggle(isDarkMode, onToggleTheme)
+        Spacer(Modifier.width(8.dp))
         SoundToggle(soundEnabled, onToggleSound)
         Spacer(Modifier.width(12.dp))
         Column(horizontalAlignment = Alignment.End) {
@@ -765,18 +784,11 @@ private fun ProgressBarRow(sessionId: Long, answered: Int, total: Int) {
 
 // Counts up under the answer box; the last 10 seconds turn into a yellow countdown.
 @Composable
-private fun LiveTimer(startedAt: Long, limitSec: Int) {
+private fun LiveTimer(tick: Long, limitSec: Int) {
     val c = AppTheme.colors
-    var sec by remember(startedAt) { mutableIntStateOf(0) }
-    LaunchedEffect(startedAt) {
-        if (startedAt == 0L) return@LaunchedEffect
-        while (true) {
-            sec = ((android.os.SystemClock.elapsedRealtime() - startedAt) / 1000L).toInt().coerceAtMost(limitSec)
-            delay(200)
-        }
-    }
+    val sec = tick.toInt().coerceAtMost(limitSec)
     val left = limitSec - sec
-    if (startedAt != 0L && left <= 10) {
+    if (left <= 10 && tick > 0) {
         Txt("Time left: $left s", 11, FontWeight.Bold, c.warning)
     } else {
         Txt("Time: $sec s", 10, FontWeight.Medium, c.accentA)
@@ -784,7 +796,7 @@ private fun LiveTimer(startedAt: Long, limitSec: Int) {
 }
 
 @Composable
-fun QuestionCard(u: UiSession, startedAt: Long = 0L, onShown: () -> Unit = {}) {
+fun QuestionCard(u: UiSession, liveTick: Long = 0L, onShown: () -> Unit = {}) {
     val c = AppTheme.colors
     val fact = u.fact ?: return
     val shape = RoundedCornerShape(26.dp)
@@ -934,7 +946,7 @@ fun QuestionCard(u: UiSession, startedAt: Long = 0L, onShown: () -> Unit = {}) {
                                 align = TextAlign.Center
                             )
                         }
-                        LiveTimer(startedAt, 120)
+                        LiveTimer(liveTick, 120)
                     }
                 }
                 else -> {
@@ -1231,7 +1243,24 @@ fun ProgressScreen(vm: TrainerViewModel) {
             verticalArrangement = Arrangement.spacedBy(16.dp)
         ) {
             item(key = "header") {
-                ProgressHeader("Progress Dashboard", "All categories") { vm.toMenu() }
+                Column(
+                    Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.CenterHorizontally,
+                    verticalArrangement = Arrangement.spacedBy(12.dp)
+                ) {
+                    ProgressHeader("Progress Dashboard", "All categories") { vm.toMenu() }
+                    
+                    Txt(
+                        text = "Select a category to view detailed stats",
+                        size = 12,
+                        weight = FontWeight.Medium,
+                        color = c.muted,
+                        modifier = Modifier.fillMaxWidth(),
+                        align = TextAlign.Center
+                    )
+                    
+                    MenuSeparator("Detailed Progress")
+                }
             }
             if (dash == null) {
                 item(key = "loading") { DashboardLoadingIndicator() }

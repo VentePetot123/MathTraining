@@ -185,7 +185,20 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     var liveTickMs by mutableStateOf(0L)
         private set
     private var isPaused = false
-    private var pausedAt = 0L
+    // Active-time stopwatch for the current question (frozen while the app is away).
+    private var timerActive = false
+    private var accumulatedMs = 0L      // active time banked before the running segment
+    private var segmentStart = 0L       // elapsedRealtime when the running segment began; 0 = frozen
+
+    private fun currentElapsedMs(): Long =
+        if (segmentStart == 0L) accumulatedMs
+        else accumulatedMs + (SystemClock.elapsedRealtime() - segmentStart)
+
+    private fun stopTimer() {
+        timerActive = false
+        segmentStart = 0L
+        accumulatedMs = 0L
+    }
 
     // ---------- startup ----------
     suspend fun preload() = withContext(Dispatchers.Default) {
@@ -572,6 +585,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         rt.startedAt = 0L
         questionStartedAt = 0L
         liveTickMs = 0L
+        stopTimer()
         timeoutJob?.cancel()
         ui = u.copy(fact = f, input = "", feedback = Feedback.None, hint = null, seq = u.seq + 1, timedOut = false)
     }
@@ -580,42 +594,40 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     // session clock for this question, so the user is only timed for their actual
     // response time, not the card animation.
     fun onAppBackground() {
-        if (!isPaused) {
-            isPaused = true
-            pausedAt = SystemClock.elapsedRealtime() - (runtime?.startedAt ?: 0L)
+        if (isPaused) return
+        isPaused = true
+        if (timerActive && segmentStart != 0L) {
+            accumulatedMs += SystemClock.elapsedRealtime() - segmentStart
+            segmentStart = 0L
         }
     }
 
     fun onAppForeground() {
-        if (isPaused) {
-            isPaused = false
-            val rt = runtime ?: return
-            // Shift the start time forward by how long we were paused
-            val now = SystemClock.elapsedRealtime()
-            rt.startedAt = now - pausedAt
-            questionStartedAt = rt.startedAt
+        if (!isPaused) return
+        isPaused = false
+        if (timerActive && segmentStart == 0L) {
+            segmentStart = SystemClock.elapsedRealtime()
         }
     }
 
     fun onQuestionShown() {
         val rt = runtime ?: return
         if (rt.startedAt != 0L) return
-        val started = SystemClock.elapsedRealtime()
-        rt.startedAt = started
-        questionStartedAt = started
         val seq = ui?.seq ?: return
+        val now = SystemClock.elapsedRealtime()
+        rt.startedAt = now              // still used as the "already started" guard
+        questionStartedAt = now
+        accumulatedMs = 0L
+        segmentStart = if (isPaused) 0L else now
+        timerActive = true
         timeoutJob?.cancel()
         timeoutJob = viewModelScope.launch {
             while (true) {
-                if (isPaused) {
-                    delay(100L)
-                    continue
-                }
-                val elapsed = SystemClock.elapsedRealtime() - started - pausedAt
+                val elapsed = currentElapsedMs()
                 liveTickMs = elapsed
                 val left = QUESTION_LIMIT_MS - elapsed
                 if (left <= 0L) break
-                delay(minOf(left, 50L)) // Update every 50ms for smooth decimal counting
+                delay(if (isPaused) 200L else minOf(left, 50L))
             }
             timeUp(seq)
         }
@@ -674,6 +686,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         if (screen != Screen.Training || u.seq != seq || u.feedback != Feedback.None) return
         
         timeoutJob?.cancel()
+        stopTimer()
         val ms = QUESTION_LIMIT_MS
         rt.totalMs += ms
         rt.answerCount++
@@ -734,7 +747,8 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         // FIX #8 — guard against a zero timer (user submits before animation done).
         // If startedAt is still 0, treat elapsed as 0 (best-effort; the answer is
         // still graded, just not timed).
-        val ms = if (rt.startedAt == 0L) 0L else SystemClock.elapsedRealtime() - rt.startedAt
+        val ms = if (timerActive) currentElapsedMs() else 0L
+        stopTimer()
         rt.totalMs += ms
         rt.answerCount++
         // FIX #8: perf — move stats write + adaptive recalculation off the main thread.

@@ -16,6 +16,8 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
+import androidx.compose.foundation.layout.BoxWithConstraints
+import androidx.compose.foundation.layout.requiredWidth
 import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -1198,22 +1200,43 @@ fun ResultsScreen(vm: TrainerViewModel) {
                     )
                 }
                 Txt("Session Complete", 14, FontWeight.Medium, Color.White.copy(alpha = 0.9f))
-                Txt("$shownScore/${r.total}  ·  $shownPct%", 40, FontWeight.ExtraBold, Color.White)
+                Txt("$shownScore/${r.total}", 40, FontWeight.ExtraBold, Color.White)
+                Txt("SCORE", 11, FontWeight.Bold, Color.White.copy(alpha = 0.7f), modifier = Modifier.padding(top = 2.dp))
             }
             ConfettiBurst(Modifier.matchParentSize())
         }
 
-        // ---- Stats ----
+// ---- Stats ----
         AppCard {
             SectionTitle("Accuracy")
             val showBarNumber = if (acc == 0) barStarted else barP.value > 0f
             AccuracyBar(
                 fraction = barP.value * acc / 100f,
                 percent = (barP.value * acc).roundToInt(),
-                showNumber = showBarNumber
+                showNumber = showBarNumber,
+                brush = Brush.linearGradient(listOf(c.success.copy(alpha = 0.7f), c.success))
+            )
+            
+            Spacer(Modifier.height(16.dp))
+            
+            // ---- Time/Answer Bar ----
+            SectionTitle("Time/Answer")
+            // Calculate average time (in seconds) based on the session runtime
+            val avgTimeMs = (vm.runtime?.totalMs ?: 0L) / r.total.coerceAtLeast(1)
+            val avgTimeSec = avgTimeMs / 1000f
+            // Normalize the time for the bar (e.g., 0s = 0%, 120s = 100%)
+            val timeFraction = (avgTimeSec / 120f).coerceIn(0f, 1f)
+            val showTimeNumber = if (avgTimeMs == 0L) barStarted else barP.value > 0f
+            
+            AccuracyBar(
+                fraction = barP.value * timeFraction,
+                percent = (avgTimeSec * barP.value).roundToInt(),
+                showNumber = showTimeNumber,
+                brush = Brush.linearGradient(listOf(Color(0xFF9C27B0).copy(alpha = 0.7f), Color(0xFF9C27B0))),
+                suffix = "s" // Add an 's' to show seconds
             )
 
-            Spacer(Modifier.height(4.dp))
+            Spacer(Modifier.height(12.dp))
 
             // Streak: no box, front and centre
             Column(
@@ -1279,34 +1302,49 @@ private fun MiniStat(label: String, value: String, modifier: Modifier = Modifier
 // empty part, white for the filled part (clipped at the fill edge), so a character the
 // fill is crossing shows both colors. Nothing is shown until the fill starts moving.
 @Composable
-private fun AccuracyBar(fraction: Float, percent: Int, showNumber: Boolean) {
+private fun AccuracyBar(
+    fraction: Float, 
+    percent: Int, 
+    showNumber: Boolean, 
+    brush: Brush = AppTheme.colors.accent,
+    suffix: String = "%"
+) {
     val c = AppTheme.colors
     val pill = RoundedCornerShape(50)
     val f = fraction.coerceIn(0f, 1f)
-    val label = "$percent%"
+    val label = "$percent$suffix"
 
-    Box(
+    BoxWithConstraints(
         Modifier
             .fillMaxWidth()
             .height(38.dp)
             .clip(pill)
             .background(c.surfaceAlt)
     ) {
-        // Fill: gradient is laid out over the FULL bar width, then clipped, so it doesn't squash.
+        val fullWidth = maxWidth
+        
+        // Fill: the gradient box is sized to the full width, then clipped by the fill fraction
         Box(
             Modifier
-                .matchParentSize()
-                .drawBehind {
-                    clipRect(right = size.width * f) { drawRect(c.accent) }
-                }
-        )
+                .fillMaxHeight()
+                .fillMaxWidth(f)
+                .align(Alignment.CenterStart)
+                .clip(pill)
+        ) {
+            Box(
+                Modifier
+                    .requiredWidth(fullWidth)
+                    .fillMaxHeight()
+                    .background(brush)
+            )
+        }
 
         if (showNumber) {
-            // Layer 1: number on the empty track, using the gradient accent
+            // Layer 1: number on the empty track, using the gradient
             Box(Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
                 GradientText(
                     text = label,
-                    brush = c.accent,
+                    brush = brush,
                     fontSize = 17.sp,
                     fontWeight = FontWeight.ExtraBold
                 )

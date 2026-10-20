@@ -451,7 +451,7 @@ fun TrendChart(
             title = "ACCURACY",
             values = accuracy,
             yMax = 100f,
-            color = Color(0xFF3DD9A0),
+            color = AppTheme.colors.success, // <-- Theme-aware green
             ticks = listOf("100%", "75%", "50%", "25%", "0%"),
             topRightText = null,
             bottomText = "Sessions: $n"
@@ -463,7 +463,7 @@ fun TrendChart(
             title = "TIME/ANSWER",
             values = seconds,
             yMax = (step * 4).toFloat(),
-            color = Color(0xFF9C27B0), // Purple color replacing red
+            color = AppTheme.colors.accentA, // <-- Theme-aware purple
             ticks = listOf("${step * 4}s", "${step * 3}s", "${step * 2}s", "${step}s", "0s"),
             topRightText = null,
             bottomText = null,
@@ -487,7 +487,8 @@ private fun ChartPanel(
 ) {
     val c = AppTheme.colors
     val muted = c.muted
-    val grid = c.onBackground.copy(alpha = 0.08f)
+    // Stronger gridlines in light mode, subtle in dark mode
+    val grid = c.onBackground.copy(alpha = if (c.isDark) 0.08f else 0.20f)
 
     Column(
         Modifier

@@ -374,12 +374,12 @@ fun RangeScreen(vm: TrainerViewModel) {
             ) {
                 Txt("ⓘ", 20, FontWeight.Bold, c.accentA)
                 Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    Txt("Rounding rule", 13, FontWeight.Bold, c.onBackground)
-                    Txt("For answers that never end (like 2/3):", 12, FontWeight.SemiBold, c.muted)
-                    Txt("•  Decimal: exactly 4 places → 0.6667", 12, FontWeight.Medium, c.onBackground)
-                    Txt("•  Percentage: exactly 2 places → 66.67%", 12, FontWeight.Medium, c.onBackground)
-                    Txt("•  Round normally: 5 or more rounds up", 12, FontWeight.Medium, c.onBackground)
-                    Txt("Exact answers (1/4 = 0.25 = 25%) need no rounding.", 11, FontWeight.Normal, c.muted)
+                    SectionTitle("Rounding rule")
+                    Txt("For repeating decimals (e.g., 2/3):", 12, FontWeight.SemiBold, c.muted)
+                    Txt("•  Decimal: 4 significant decimal places (0.6667)", 12, FontWeight.Medium, c.onBackground)
+                    Txt("•  Percentage: 2 significant decimal places (66.67%)", 12, FontWeight.Medium, c.onBackground)
+                    Txt("•  Standard rounding applies (≥5 rounds up)", 12, FontWeight.Medium, c.onBackground)
+                    Txt("Terminating decimals (0.25, 25%) require exact values.", 11, FontWeight.Normal, c.muted)
                 }
             }
         }

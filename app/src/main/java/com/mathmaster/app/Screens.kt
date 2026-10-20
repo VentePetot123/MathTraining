@@ -59,6 +59,7 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
+import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.SpanStyle
@@ -232,7 +233,7 @@ fun WelcomeMessage() {
         verticalArrangement = Arrangement.spacedBy(2.dp)
     ) {
         Txt("$greeting!", 20, FontWeight.ExtraBold, c.onBackground, align = TextAlign.Center)
-        Txt("Welcome to your training", 14, FontWeight.SemiBold, c.accentA, align = TextAlign.Center)
+        Txt("Welcome to Your Training", 14, FontWeight.SemiBold, c.accentA, align = TextAlign.Center)
         Txt("Pick a category and let's sharpen your mind.", 12, FontWeight.Medium, c.muted, align = TextAlign.Center)
     }
 }
@@ -516,7 +517,7 @@ fun RangeScreen(vm: TrainerViewModel) {
         // ---- Number range card ----
         CompactCard {
             Txt(
-                text = if (cat.usesFractionKeys) "Denominators" else "Range",
+                text = if (cat.usesFractionKeys) "NUMERATORS & DENOMINATORS RANGE" else "RANGE",
                 size = 15,
                 weight = FontWeight.ExtraBold,
                 color = c.accentA,
@@ -539,7 +540,7 @@ fun RangeScreen(vm: TrainerViewModel) {
         // ---- Questions per session card ----
         CompactCard {
             Txt(
-                text = "Questions",
+                text = "QUESTIONS",
                 size = 15,
                 weight = FontWeight.ExtraBold,
                 color = c.accentA,
@@ -690,7 +691,7 @@ fun TrainingScreen(vm: TrainerViewModel) {
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState())
                         // Padding AFTER verticalScroll = inside the clip, so the shadow has room to draw
-                        .padding(horizontal = 12.dp, vertical = 24.dp)
+                        .padding(start = 12.dp, end = 12.dp, top = 24.dp, bottom = 40.dp)
                 ) {
                     // FIX #8: perf — the question card re-renders only when its own
                     // fields change. The keypad's `enabled` value is passed in as a
@@ -837,8 +838,10 @@ fun QuestionCard(u: UiSession, liveTick: Long = 0L, onShown: () -> Unit = {}) {
             .fillMaxWidth()
             .graphicsLayer {
                 alpha = entrance.value
-                translationY = (1f - entrance.value) * 48.dp.toPx()
+                translationY = (1f - entrance.value) * 24.dp.toPx() // Was 48.dp
                 translationX = shake.value.dp.toPx()
+                // Fade each draw call directly: no offscreen buffer, so the shadow isn't clipped
+                compositingStrategy = CompositingStrategy.ModulateAlpha
             }
             .shadow(10.dp, shape)
             .clip(shape)
@@ -1145,40 +1148,53 @@ fun ResultsScreen(vm: TrainerViewModel) {
             .padding(20.dp),
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
-        Column(
+        // ---- Hero: category, "Session Complete", score. Confetti bursts inside it. ----
+        Box(
             Modifier
                 .fillMaxWidth()
                 .shadow(10.dp, shape)
                 .clip(shape)
                 .background(Brush.linearGradient(listOf(cat.colorA, cat.colorB)))
-                .padding(22.dp),
-            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            Txt("Session complete", 14, FontWeight.Medium, Color.White.copy(alpha = 0.9f))
-            Txt(cat.name, 24, FontWeight.ExtraBold, Color.White)
-            Txt("${r.score}/${r.total}  ·  $acc%", 40, FontWeight.ExtraBold, Color.White)
+            Column(
+                Modifier.fillMaxWidth().padding(horizontal = 22.dp, vertical = 24.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.Center
+                ) {
+                    Txt(cat.symbol, 28, FontWeight.Bold, Color.White)
+                    Spacer(Modifier.width(10.dp))
+                    Txt(
+                        cat.name, 22, FontWeight.ExtraBold, Color.White,
+                        Modifier.weight(1f, fill = false),
+                        TextAlign.Center, lineHeight = 26
+                    )
+                }
+                Txt("Session Complete", 14, FontWeight.Medium, Color.White.copy(alpha = 0.9f))
+                Txt("${r.score}/${r.total}  ·  $acc%", 40, FontWeight.ExtraBold, Color.White)
+            }
+            // Fires once, then removes itself
+            ConfettiBurst(Modifier.matchParentSize())
         }
 
+        // ---- Stats ----
         AppCard {
-            Txt("Accuracy", 16, FontWeight.Bold)
+            SectionTitle("Accuracy")
             GradientProgressBar(target)
-            Txt("Best streak: ${r.best}", 14, FontWeight.Medium, c.muted)
-            Txt("Improved questions: ${r.improved}", 14, FontWeight.Medium, c.muted)
-            Txt("New questions introduced: ${r.introduced}", 14, FontWeight.Medium, c.muted)
+            Spacer(Modifier.height(2.dp))
+            StatTile("STREAK", "${r.best}", "🔥")
+            StatTile("Improved Questions", "${r.improved}")
+            StatTile("New Questions Introduced", "${r.introduced}")
         }
 
-        // FIX #8 — "To Review" is now a proper collapsible section using the same
-        // section title and chevron as the Progress tables. It shows the first 3
-        // mistakes by default, and a chevron expands to the full list (no cap).
         ReviewSection(r.missed)
 
         GradientButton("Practice again", Modifier.fillMaxWidth()) { vm.startSession() }
-        // FIX #8 — resolve the current category once, reuse for both secondary buttons.
         val currentCategory = Categories.all.firstOrNull { it.id == r.categoryId }
         if (currentCategory != null) {
-            // FIX #8 — NEW: jump to the full Detailed Progress view for this category.
-            // Uses the same openCategoryDetail() path as tapping a category card on the
-            // Progress Dashboard, so all dashboard data is loaded and shown correctly.
             SoftButton(
                 "View Progress",
                 Modifier.fillMaxWidth(),
@@ -1191,6 +1207,36 @@ fun ResultsScreen(vm: TrainerViewModel) {
             )
         }
         SoftButton("Back to menu", Modifier.fillMaxWidth()) { vm.toMenu() }
+    }
+}
+
+// Centered "LABEL: X" tile; the value is green and the optional suffix (emoji) stays neutral.
+@Composable
+private fun StatTile(label: String, value: String, suffix: String = "") {
+    val c = AppTheme.colors
+    Box(
+        Modifier
+            .fillMaxWidth()
+            .clip(RoundedCornerShape(14.dp))
+            .background(c.surfaceAlt)
+            .padding(vertical = 14.dp, horizontal = 12.dp),
+        contentAlignment = Alignment.Center
+    ) {
+        Text(
+            text = buildAnnotatedString {
+                withStyle(SpanStyle(color = c.muted, fontWeight = FontWeight.SemiBold)) {
+                    append("$label: ")
+                }
+                withStyle(SpanStyle(color = c.success, fontWeight = FontWeight.ExtraBold, fontSize = 20.sp)) {
+                    append(value)
+                }
+                if (suffix.isNotEmpty()) {
+                    withStyle(SpanStyle(color = c.onBackground)) { append(" $suffix") }
+                }
+            },
+            fontSize = 15.sp,
+            textAlign = TextAlign.Center
+        )
     }
 }
 
@@ -1250,12 +1296,13 @@ fun ProgressScreen(vm: TrainerViewModel) {
                 ) {
                     ProgressHeader("Progress Dashboard", "All categories") { vm.toMenu() }
                     
+                    // Added top padding for extra breathing room and updated text
                     Txt(
-                        text = "Select a category to view detailed stats",
+                        text = "Select a Category to View Stats",
                         size = 12,
                         weight = FontWeight.Medium,
                         color = c.muted,
-                        modifier = Modifier.fillMaxWidth(),
+                        modifier = Modifier.fillMaxWidth().padding(top = 8.dp),
                         align = TextAlign.Center
                     )
                     

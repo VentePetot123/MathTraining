@@ -674,6 +674,7 @@ fun TrainingScreen(vm: TrainerViewModel) {
                 total = u.total,
                 score = u.score,
                 streak = u.streak,
+                showAnswer = u.showAnswer,
                 onQuit = { vm.showQuit = true },
                 soundEnabled = vm.soundEnabled,
                 onToggleSound = { vm.toggleSound() },
@@ -755,6 +756,7 @@ private fun HeaderBar(
     total: Int,
     score: Int,
     streak: Int,
+    showAnswer: Boolean = false,
     onQuit: () -> Unit,
     soundEnabled: Boolean = true,
     onToggleSound: () -> Unit = {},
@@ -773,6 +775,9 @@ private fun HeaderBar(
         SoundToggle(soundEnabled, onToggleSound)
         Spacer(Modifier.width(12.dp))
         Column(horizontalAlignment = Alignment.End) {
+            // If we just submitted, show the current question number. 
+            // Otherwise, show the upcoming one.
+            val displayQ = if (showAnswer) answered else minOf(answered + 1, total)
             Txt("Q ${minOf(answered + 1, total)}/$total", 17, FontWeight.Bold)
             TextWithFlame(
                 "Score $score · Streak $streak",
@@ -929,12 +934,7 @@ fun QuestionCard(u: UiSession, liveTickMs: Long = 0L, onShown: () -> Unit = {}) 
             len <= 80 -> 14
             else -> 13
         }
-        // Digits per line: smaller text fits more per row, so long answers use fewer lines.
-        val perLine = when {
-            len <= 40 -> 20   // up to 2 lines
-            len <= 80 -> 28   // up to 3 lines (increased from 27)
-            else -> 34        // up to 5 lines (increased from 32)
-        }
+
         Box(
             Modifier
                 .fillMaxWidth()
@@ -948,7 +948,7 @@ fun QuestionCard(u: UiSession, liveTickMs: Long = 0L, onShown: () -> Unit = {}) 
                 Txt("?", 28, FontWeight.Bold, c.muted)
             } else {
                 Text(
-                    text = u.input.chunked(perLine).joinToString("\n"),
+                    text = u.input,   // no manual chunking: wraps only when a line is full
                     color = c.onBackground,
                     fontSize = inputSize.sp,
                     lineHeight = (inputSize * 1.35f).sp,
@@ -994,7 +994,7 @@ fun QuestionCard(u: UiSession, liveTickMs: Long = 0L, onShown: () -> Unit = {}) 
                             FeedbackMark(ok, u.seq, Modifier.size(22.dp))
                             val longAns = fact.answer.length > 14
                             Text(
-                                text = if (longAns) fact.answer.chunked(34).joinToString("\n") else fact.answer,
+                                text = fact.answer,   // was: if (longAns) fact.answer.chunked(20)... else fact.answer
                                 color = resultColor,
                                 fontSize = (if (longAns) 13 else 20).sp,
                                 lineHeight = (if (longAns) 18 else 24).sp,
@@ -1170,20 +1170,31 @@ fun ResultsScreen(vm: TrainerViewModel) {
     val heroP = remember { Animatable(0f) }
     val barP = remember { Animatable(0f) }
     var barStarted by remember { mutableStateOf(false) }
+    val countP = remember { Animatable(0f) }
+    val slideP = remember { Animatable(0f) }
+    val flameP = remember { Animatable(0f) }
     
     LaunchedEffect(Unit) {
         coroutineScope {
             launch {
-                delay(300)                                   // hero starts counting at 300ms
-                heroP.animateTo(1f, tween(700, easing = FastOutSlowInEasing)) // Was 1000ms
+                delay(200)                                   // hero starts counting at 0.2s
+                heroP.animateTo(1f, tween(700, easing = FastOutSlowInEasing)) 
             }
             launch {
-                delay(2000)                                  // bars start filling at 2.0s
+                delay(900)                                                     // start bars right as hero finishes
                 barStarted = true
-                barP.animateTo(1f, tween(800, easing = FastOutSlowInEasing)) // Was 1100ms
+                barP.animateTo(1f, tween(750, easing = FastOutSlowInEasing))
+                delay(200)                                                     // brief pause after bars finish
+                
+                // --- Streak animation (now happens after the bars) ---
+                countP.animateTo(1f, tween(600, easing = FastOutSlowInEasing)) // fast count-up
+                delay(200)
+                slideP.animateTo(1f, tween(350, easing = FastOutSlowInEasing)) // swoop left
+                flameP.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 300f)) // flame lights up
             }
         }
     }
+
     val shownScore = (heroP.value * r.score).roundToInt()
     val shownPct = (heroP.value * acc).roundToInt()
 
@@ -1267,9 +1278,14 @@ fun ResultsScreen(vm: TrainerViewModel) {
                     fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp,
                     lineHeight = 12.sp
                 )
-                TextWithFlame(
-                    "${r.best}", 48, FontWeight.ExtraBold, c.success,
-                    flameSize = 38.dp, gap = 6.dp
+                StreakCounter(
+                    text = "${(countP.value * r.best).roundToInt()}",
+                    countSize = 48,
+                    color = c.success,
+                    flameSize = 38.dp,
+                    slide = slideP.value,
+                    flame = flameP.value,
+                    modifier = Modifier.fillMaxWidth()
                 )
             }
 

@@ -1217,12 +1217,12 @@ fun ResultsScreen(vm: TrainerViewModel) {
                 brush = Brush.linearGradient(listOf(c.success.copy(alpha = 0.7f), c.success))
             )
             
-            Spacer(Modifier.height(16.dp))
+            Spacer(Modifier.height(4.dp))
             
             // ---- Time/Answer Bar ----
             SectionTitle("Time/Answer")
-            // Read the average time safely from the ResultsUi object
-            val avgTimeMs = r.avgMs.toLong()
+            // Calculate average time (in seconds) based on the session runtime
+            val avgTimeMs = (vm.runtime?.totalMs ?: 0L) / r.total.coerceAtLeast(1)
             val avgTimeSec = avgTimeMs / 1000f
             // Normalize the time for the bar (e.g., 0s = 0%, 120s = 100%)
             val timeFraction = (avgTimeSec / 120f).coerceIn(0f, 1f)
@@ -1236,7 +1236,7 @@ fun ResultsScreen(vm: TrainerViewModel) {
                 suffix = "s" // Add an 's' to show seconds
             )
 
-            Spacer(Modifier.height(12.dp))
+            Spacer(Modifier.height(4.dp))
 
             // Streak: no box, front and centre
             Column(

@@ -59,7 +59,6 @@ import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
-import androidx.compose.ui.graphics.CompositingStrategy
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.text.SpanStyle
@@ -690,8 +689,7 @@ fun TrainingScreen(vm: TrainerViewModel) {
                         .align(Alignment.TopCenter)
                         .fillMaxWidth()
                         .verticalScroll(rememberScrollState())
-                        // Padding AFTER verticalScroll = inside the clip, so the shadow has room to draw
-                        .padding(start = 12.dp, end = 12.dp, top = 24.dp, bottom = 40.dp)
+                        .padding(vertical = 4.dp)
                 ) {
                     // FIX #8: perf — the question card re-renders only when its own
                     // fields change. The keypad's `enabled` value is passed in as a
@@ -833,24 +831,29 @@ fun QuestionCard(u: UiSession, liveTick: Long = 0L, onShown: () -> Unit = {}) {
     val feedbackColor = if (u.feedback == Feedback.Wrong) c.error else c.success
     val promptSize = remember(fact.key) { if (fact.prompt.length > 14) 30 else 44 }
 
-    Column(
+    // Wrapper: carries the fade/slide/shake. The padding is INSIDE the layer, so the
+    // offscreen fade buffer is big enough to contain the shadow.
+    Box(
         Modifier
             .fillMaxWidth()
             .graphicsLayer {
                 alpha = entrance.value
-                translationY = (1f - entrance.value) * 24.dp.toPx() // Was 48.dp
+                translationY = (1f - entrance.value) * 48.dp.toPx()
                 translationX = shake.value.dp.toPx()
-                // Fade each draw call directly: no offscreen buffer, so the shadow isn't clipped
-                compositingStrategy = CompositingStrategy.ModulateAlpha
             }
-            .shadow(10.dp, shape)
-            .clip(shape)
-            .background(c.surface)
-            .drawBehind { drawRect(feedbackColor.copy(alpha = tint.value)) }
-            .padding(22.dp),
-        horizontalAlignment = Alignment.CenterHorizontally,
-        verticalArrangement = Arrangement.spacedBy(16.dp)
+            .padding(horizontal = 12.dp, vertical = 20.dp)
     ) {
+        Column(
+            Modifier
+                .fillMaxWidth()
+                .shadow(10.dp, shape)
+                .clip(shape)
+                .background(c.surface)
+                .drawBehind { drawRect(feedbackColor.copy(alpha = tint.value)) }
+                .padding(22.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(16.dp)
+        ) {
 
         // FIX: Gradient badge to indicate question type (FDP category only)
         val typeLabel = when (fact.kind) {
@@ -985,6 +988,7 @@ fun QuestionCard(u: UiSession, liveTick: Long = 0L, onShown: () -> Unit = {}) {
                 }
             }
         }
+    }
     }
 }
 

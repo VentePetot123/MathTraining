@@ -1175,22 +1175,37 @@ fun ResultsScreen(vm: TrainerViewModel) {
     val flameP = remember { Animatable(0f) }
     
     LaunchedEffect(Unit) {
+        val ease = FastOutSlowInEasing
         coroutineScope {
+            // 1) Score count
             launch {
-                delay(200)                                   // hero starts counting at 0.2s
-                heroP.animateTo(1f, tween(700, easing = FastOutSlowInEasing)) 
-            }
-            launch {
-                delay(900)                                                     // start bars right as hero finishes
-                barStarted = true
-                barP.animateTo(1f, tween(750, easing = FastOutSlowInEasing))
-                delay(200)                                                     // brief pause after bars finish
-                
-                // --- Streak animation (now happens after the bars) ---
-                countP.animateTo(1f, tween(600, easing = FastOutSlowInEasing)) // fast count-up
                 delay(200)
-                slideP.animateTo(1f, tween(350, easing = FastOutSlowInEasing)) // swoop left
-                flameP.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 300f)) // flame lights up
+                heroP.animateTo(1f, tween(700, easing = ease))
+            }
+
+            // 2) Bars, then 3) streak
+            launch {
+                delay(900)                                   // bars start as the score finishes
+                barStarted = true
+                barP.animateTo(1f, tween(750, easing = ease))
+                delay(100)
+
+                // Streak: count → slide → flame, overlapping
+                val countMs = (250 + r.best * 40).coerceIn(250, 600)
+                val slideMs = 250
+                coroutineScope {
+                    launch {
+                        countP.animateTo(1f, tween(countMs, easing = ease))
+                    }
+                    launch {
+                        delay(countMs - 60L)                 // starts just before the count ends
+                        slideP.animateTo(1f, tween(slideMs, easing = ease))
+                    }
+                    launch {
+                        delay(countMs - 60L + (slideMs * 0.6f).toLong())  // flame lights at ~60% of the slide
+                        flameP.animateTo(1f, spring(dampingRatio = 0.45f, stiffness = 500f))
+                    }
+                }
             }
         }
     }

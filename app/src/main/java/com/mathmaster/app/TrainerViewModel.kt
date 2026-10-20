@@ -43,7 +43,8 @@ data class ResultsUi(
     val best: Int,
     val missed: List<String>,
     val improved: Int,
-    val introduced: Int
+    val introduced: Int,
+    val avgMs: Int // <-- Added this
 )
 
 data class Totals(val answers: Int, val sessions: Int, val bestStreak: Int)
@@ -812,7 +813,8 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
             best = u.best,
             missed = rt.missed.values.map { it.solution },
             improved = rt.improved,
-            introduced = rt.introduced
+            introduced = rt.introduced,
+            avgMs = avgMs // <-- Added this
         )
         refreshMenu()
         // FIX #8: perf — if the nav bails (lock engaged), don't leave `results`

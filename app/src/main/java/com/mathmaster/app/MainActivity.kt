@@ -72,22 +72,6 @@ fun AppRoot(vm: TrainerViewModel) {
         }
     }
 
-    // FIX: Pause the timer when the app goes to the background
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_PAUSE -> vm.onAppBackground()
-                Lifecycle.Event.ON_RESUME -> vm.onAppForeground()
-                else -> Unit
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
-
     // FIX #8: perf — ONE CompositionLocalProvider wraps the whole tree ...
     CompositionLocalProvider(LocalNavLock provides navLock) {
 

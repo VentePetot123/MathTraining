@@ -31,6 +31,10 @@ data class AppColors(
     val isDark: Boolean
 ) {
     val accent: Brush get() = Brush.linearGradient(listOf(accentA, accentB))
+    
+    // A dedicated, theme-aware border color for light/dark modes
+    val borderColor: Color
+        get() = if (isDark) Color.White.copy(alpha = 0.10f) else accentA.copy(alpha = 0.15f)
 }
 
 val LightColors = AppColors(

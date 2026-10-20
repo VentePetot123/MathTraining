@@ -294,30 +294,50 @@ object Grading {
     private fun placesAfterPoint(s: String): Int =
         if (s.contains('.')) s.substringAfter('.').length else 0
 
+    private fun isValidNumber(s: String): Boolean {
+        if (s.isEmpty() || s == "-" || s == "." || s == "-.") return false
+        return s.toBigDecimalOrNull() != null
+    }
+
+    /** Yellow hint when the input is incomplete or in the wrong format; null when it can be graded. */
     fun check(f: Fact, raw: String): String? {
         val t = raw.trim()
         if (t.isEmpty()) return null
         when (f.kind) {
             Kind.INT -> {
                 if (t == "-") return "Add a number after the minus sign"
+                if (!isValidNumber(t)) return "Check the number format"
             }
             Kind.DEC -> {
                 if (!t.contains('.')) return "Add a decimal point (.)"
+                if (t.startsWith(".")) return "Add a number before the decimal point"
                 if (t.endsWith(".")) return "Add digits after the decimal point"
+                if (!isValidNumber(t)) return "Check the number format"
                 if (f.infinite && placesAfterPoint(t) != 4) return "Round to exactly 4 decimal places"
             }
             Kind.PCT -> {
                 if (!t.contains('%')) return "Add a % sign at the end"
                 if (!t.endsWith("%")) return "Put the % sign at the end"
                 val body = t.dropLast(1)
-                if (body.none { it.isDigit() }) return "Add a number before the %"
+                if (body.isEmpty()) return "Add a number before the %"
+                if (body.contains('%')) return "Only one % sign is allowed"
+                if (body.startsWith(".")) return "Add a number before the decimal point"
                 if (body.endsWith(".")) return "Add digits after the decimal point"
+                if (!isValidNumber(body)) return "Check the number format"
                 if (f.infinite && placesAfterPoint(body) != 2) return "Round to exactly 2 decimal places"
             }
             Kind.FRAC -> {
-                if (!t.contains('/')) return "Add a slash (/) for the fraction"
-                if (t.startsWith("/") || t.endsWith("/")) return "Add numbers on both sides of the /"
-                if (t.substringAfter('/').all { it == '0' }) return "The bottom number can't be 0"
+                if (!t.contains('/')) return "Use a fraction format (e.g., 1/2)"
+                if (t.count { it == '/' } > 1) return "Use only one slash (/) for the fraction"
+                val parts = t.split("/")
+                if (parts.size != 2) return "Use a fraction format (e.g., 1/2)"
+                val top = parts[0]
+                val bottom = parts[1]
+                if (top.isEmpty()) return "Add a number before the slash"
+                if (bottom.isEmpty()) return "Add a number after the slash"
+                if (!isValidNumber(top)) return "Check the top number format"
+                if (!isValidNumber(bottom)) return "Check the bottom number format"
+                if (bottom.toBigDecimalOrNull()?.signum() == 0) return "The bottom number can't be 0"
             }
         }
         return null

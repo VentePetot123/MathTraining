@@ -702,7 +702,7 @@ fun TrainingScreen(vm: TrainerViewModel) {
                         // the entrance animation finishes (see LaunchedEffect inside
                         // QuestionCard). This ensures the timer measures only the
                         // user's thinking time, not the animation duration.
-                        QuestionCard(u, liveTick = vm.liveTick) { vm.onQuestionShown() }
+                        QuestionCard(u, liveTickMs = vm.liveTickMs) { vm.onQuestionShown() }
                     }
                 }
             }
@@ -786,19 +786,24 @@ private fun ProgressBarRow(sessionId: Long, answered: Int, total: Int) {
 
 // Counts up under the answer box; the last 10 seconds turn into a yellow countdown.
 @Composable
-private fun LiveTimer(tick: Long, limitSec: Int) {
+private fun LiveTimer(tickMs: Long, limitSec: Int) {
     val c = AppTheme.colors
-    val sec = tick.toInt().coerceAtMost(limitSec)
-    val left = limitSec - sec
-    if (left <= 10 && tick > 0) {
-        Txt("Time left: $left s", 11, FontWeight.Bold, c.warning)
+    val limitMs = limitSec * 1000L
+    val leftMs = limitMs - tickMs
+    
+    if (leftMs <= 10000L && tickMs > 0) {
+        // Show whole seconds when counting down the final 10 seconds
+        val secLeft = (leftMs / 1000L).toInt().coerceAtLeast(0)
+        Txt("Time left: $secLeft s", 11, FontWeight.Bold, c.warning)
     } else {
-        Txt("Time: $sec s", 10, FontWeight.Medium, c.accentA)
+        // Show decimals (e.g. 2.3 s) while counting up
+        val secs = tickMs / 1000.0
+        Txt(String.format(Locale.US, "Time: %.1f s", secs), 10, FontWeight.Medium, c.accentA)
     }
 }
 
 @Composable
-fun QuestionCard(u: UiSession, liveTick: Long = 0L, onShown: () -> Unit = {}) {
+fun QuestionCard(u: UiSession, liveTickMs: Long = 0L, onShown: () -> Unit = {}) {
     val c = AppTheme.colors
     val fact = u.fact ?: return
     val shape = RoundedCornerShape(26.dp)
@@ -955,7 +960,7 @@ fun QuestionCard(u: UiSession, liveTick: Long = 0L, onShown: () -> Unit = {}) {
                                 align = TextAlign.Center
                             )
                         }
-                        LiveTimer(liveTick, 120)
+                        LiveTimer(liveTickMs, 120)
                     }
                 }
                 else -> {

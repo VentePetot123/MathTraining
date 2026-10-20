@@ -2,6 +2,7 @@ package com.mathmaster.app
 
 import androidx.compose.ui.graphics.Color
 import java.math.BigInteger
+import java.math.RoundingMode
 import kotlin.math.abs
 
 enum class Kind { INT, PCT, DEC, FRAC }
@@ -221,36 +222,38 @@ private fun genFdp(lo0: Int, hi0: Int): List<Fact> {
     val map = LinkedHashMap<String, Fact>()
     for (d in lo..hi) for (n in 1 until d) {
         if (gcd(n, d) != 1) continue
-        val ratio = n.toDouble() / d
         val frac = "$n/$d"
+        val bn = n.toBigDecimal()
+        val bp = (n * 100).toBigDecimal()
+        val bd = d.toBigDecimal()
 
-        // FIX #8 — a decimal is "infinite" if the denominator has a prime factor
-        // other than 2 or 5. That's when the decimal expansion repeats forever and
-        // must be rounded (to 4 places here) for the user to be able to type it.
-        // Finite decimals like 1/4 = 0.25 must render as the exact value, not 0.2500.
         val isInfinite = repeats(d)
 
-        // Percent always rounds to 2 decimals (display convention) — kept as-is.
-        val pct = fmt(ratio * 100, 2) + "%"
+        val dec: String
+        val pct: String
+        if (isInfinite) {
+            dec = bn.divide(bd, 4, RoundingMode.HALF_UP).toPlainString()
+            pct = bp.divide(bd, 2, RoundingMode.HALF_UP).toPlainString() + "%"
+        } else {
+            dec = bn.divide(bd).stripTrailingZeros().toPlainString()
+            pct = bp.divide(bd).stripTrailingZeros().toPlainString() + "%"
+        }
 
-        // Decimal: use 4 places only if infinite; otherwise use the exact value with
-        // trailing zeros trimmed (e.g. 0.25, not 0.2500; 0.5, not 0.50).
-        val dec = if (isInfinite) fmt(ratio, 4) else trimExact(ratio)
-
-        val decNote = if (isInfinite) "Round to 4 decimal places" else null
-        val pctNote = if (isInfinite) "Round to 2 decimal places" else null
+        val eq = if (isInfinite) "≈" else "="
+        val decNote = if (isInfinite) "Never ends: round to 4 decimal places" else null
+        val pctNote = if (isInfinite) "Never ends: round to 2 decimal places" else null
 
         map["$frac → %"] = Fact(
-            "$frac → %", "$frac = ? (Percentage)", pct, "$frac = $pct",
-            Kind.PCT, pctNote
+            "$frac → %", "$frac = ? (percentage)", pct, "$frac $eq $pct",
+            Kind.PCT, pctNote, isInfinite
         )
         map["$frac → dec"] = Fact(
-            "$frac → dec", "$frac = ? (Decimal)", dec, "$frac = $dec",
+            "$frac → dec", "$frac = ? (decimal)", dec, "$frac $eq $dec",
             Kind.DEC, decNote, isInfinite
         )
         if (!map.containsKey("$pct → frac")) {
             map["$pct → frac"] = Fact(
-                "$pct → frac", "$pct = ? (Fraction)", frac, "$pct = $frac",
+                "$pct → frac", "$pct = ? (fraction)", frac, "$pct $eq $frac",
                 Kind.FRAC
             )
         }
@@ -288,7 +291,9 @@ object Categories {
 }
 
 object Grading {
-    /** A yellow hint when the input can't be graded yet, or null when it is ready to grade. */
+    private fun placesAfterPoint(s: String): Int =
+        if (s.contains('.')) s.substringAfter('.').length else 0
+
     fun check(f: Fact, raw: String): String? {
         val t = raw.trim()
         if (t.isEmpty()) return null
@@ -297,44 +302,35 @@ object Grading {
                 if (t == "-") return "Add a number after the minus sign"
             }
             Kind.DEC -> {
-                if (t == ".") return "Add digits to the decimal point"
                 if (!t.contains('.')) return "Add a decimal point (.)"
-            }
-            Kind.FRAC -> {
-                if (!t.contains('/')) return "Use a fraction format (e.g., 1/2)"
-                if (t.startsWith("/") || t.endsWith("/")) return "Add numbers on both sides of the slash (/)"
+                if (t.endsWith(".")) return "Add digits after the decimal point"
+                if (f.infinite && placesAfterPoint(t) != 4) return "Round to exactly 4 decimal places"
             }
             Kind.PCT -> {
-                if (t == "%") return "Add a number before the %"
-                if (!t.contains('%')) return "Add a % sign for the percentage"
+                if (!t.contains('%')) return "Add a % sign at the end"
                 if (!t.endsWith("%")) return "Put the % sign at the end"
+                val body = t.dropLast(1)
+                if (body.none { it.isDigit() }) return "Add a number before the %"
+                if (body.endsWith(".")) return "Add digits after the decimal point"
+                if (f.infinite && placesAfterPoint(body) != 2) return "Round to exactly 2 decimal places"
+            }
+            Kind.FRAC -> {
+                if (!t.contains('/')) return "Add a slash (/) for the fraction"
+                if (t.startsWith("/") || t.endsWith("/")) return "Add numbers on both sides of the /"
+                if (t.substringAfter('/').all { it == '0' }) return "The bottom number can't be 0"
             }
         }
         return null
     }
-    /** True/False when graded, null when the input cannot be parsed. */
+
     fun grade(f: Fact, raw: String): Boolean? {
         val t = raw.trim().replace(",", "").replace(" ", "")
         if (t.isEmpty()) return null
         return when (f.kind) {
-            Kind.INT -> (t.toBigIntegerOrNull()?.toString() == f.answer)
-            Kind.PCT -> t.trimEnd('%').toDoubleOrNull()
-                ?.let { abs(it - f.answer.trimEnd('%').toDouble()) <= 0.05 }
-            Kind.DEC -> t.toDoubleOrNull()?.let { user ->
-                val expected = f.answer.toDouble()
-                if (f.infinite) {
-                    // FIX #8 — infinite decimal: accept anything within 4 decimal places
-                    // of the correct rounded value. Tolerance of 0.0001 covers both the
-                    // user typing "0.3333" (exactly) and "0.33333" (extra digit rounded).
-                    abs(user - expected) <= 0.0001
-                } else {
-                    // FIX #8 — finite decimal: require exact match. If canonical is
-                    // "0.25", user must type 0.25 (not 0.2500 — but the parser trims
-                    // trailing zeros implicitly because 0.2500.toDouble() == 0.25).
-                    // Tiny tolerance to handle floating point representation.
-                    abs(user - expected) <= 1e-9
-                }
-            }
+            Kind.INT -> t.toBigIntegerOrNull()?.toString() == f.answer
+            Kind.DEC -> t.toBigDecimalOrNull()?.let { it.compareTo(f.answer.toBigDecimal()) == 0 }
+            Kind.PCT -> t.removeSuffix("%").toBigDecimalOrNull()
+                ?.let { it.compareTo(f.answer.removeSuffix("%").toBigDecimal()) == 0 }
             Kind.FRAC -> {
                 val p = t.split("/")
                 val n = if (p.size == 2) p[0].toLongOrNull() else null
@@ -342,8 +338,6 @@ object Grading {
                 if (n == null || d == null || d == 0L) {
                     null
                 } else {
-                    // FIX #11: guard against a malformed canonical answer (defensive;
-                    // current generators always emit "n/d", but a future category might not).
                     val e = f.answer.split("/")
                     if (e.size != 2) return null
                     val en = e[0].toLongOrNull()

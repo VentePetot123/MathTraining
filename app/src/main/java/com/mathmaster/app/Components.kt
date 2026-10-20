@@ -89,6 +89,10 @@ import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.layout.LastBaseline
+import androidx.compose.animation.core.RepeatMode
+import androidx.compose.animation.core.infiniteRepeatable
+import androidx.compose.animation.core.rememberInfiniteTransition
+import androidx.compose.ui.graphics.TransformOrigin
 import androidx.compose.ui.unit.Constraints
 import kotlin.math.roundToInt
 import androidx.compose.ui.unit.dp
@@ -821,6 +825,71 @@ fun TextWithFlame(
         layout(t.width + gapPx + flame.width, (maxY - minY).roundToInt()) {
             t.placeRelative(0, (-minY).roundToInt())
             flame.placeRelative(t.width + gapPx, (flameTop - minY).roundToInt())
+        }
+    }
+}
+
+// Animated streak: number counts while centered, slides left (slide 0→1), then the
+// flame lights up on its right (flame 0→1, may overshoot for a bounce).
+@Composable
+fun StreakCounter(
+    text: String,
+    countSize: Int,
+    color: Color,
+    flameSize: Dp,
+    slide: Float,
+    flame: Float,
+    modifier: Modifier = Modifier,
+    gap: Dp = 6.dp
+) {
+    val flicker = rememberInfiniteTransition(label = "flicker")
+    val flick by flicker.animateFloat(
+        initialValue = 1f,
+        targetValue = 1.07f,
+        animationSpec = infiniteRepeatable(
+            tween(450, easing = FastOutSlowInEasing), RepeatMode.Reverse
+        ),
+        label = "flickerScale"
+    )
+
+    Layout(
+        content = {
+            Txt(text, countSize, FontWeight.ExtraBold, color)
+            FlameIcon(
+                flameSize,
+                Modifier.graphicsLayer {
+                    val lit = flame.coerceIn(0f, 1f)
+                    alpha = lit
+                    scaleX = flame.coerceAtLeast(0f)
+                    scaleY = flame.coerceAtLeast(0f) * (1f + (flick - 1f) * lit)
+                    transformOrigin = TransformOrigin(0.5f, 1f)   // grows from the bottom
+                }
+            )
+        },
+        modifier = modifier
+    ) { measurables, constraints ->
+        val gapPx = gap.roundToPx()
+        val t = measurables[0].measure(Constraints())
+        val fl = measurables[1].measure(Constraints())
+
+        val baseline = t[LastBaseline]
+        val cap = countSize.sp.toPx() * 0.72f
+        val textTop = baseline - cap
+        val flameTop = (baseline - cap / 2f) - fl.height / 2f
+        val minY = minOf(textTop, flameTop)
+        val maxY = maxOf(baseline.toFloat(), flameTop + fl.height)
+
+        val w = constraints.maxWidth
+        val centeredX = (w - t.width) / 2f
+        val finalX = (w - (t.width + gapPx + fl.width)) / 2f
+        val x = centeredX + (finalX - centeredX) * slide.coerceIn(0f, 1f)
+
+        layout(w, (maxY - minY).roundToInt()) {
+            t.placeRelative(x.roundToInt(), (-minY).roundToInt())
+            fl.placeRelative(
+                (finalX + t.width + gapPx).roundToInt(),
+                (flameTop - minY).roundToInt()
+            )
         }
     }
 }

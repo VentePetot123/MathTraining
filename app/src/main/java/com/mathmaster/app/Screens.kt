@@ -794,9 +794,9 @@ private fun LiveTimer(tickMs: Long, limitSec: Int) {
     val leftMs = limitMs - tickMs
     
     if (leftMs <= 10000L && tickMs > 0) {
-        // Show whole seconds when counting down the final 10 seconds
-        val secLeft = (leftMs / 1000L).toInt().coerceAtLeast(0)
-        Txt("Time left: $secLeft s", 11, FontWeight.Bold, c.warning)
+        // Show one decimal place for the final 10 seconds
+        val secLeft = leftMs / 1000.0
+        Txt(String.format(Locale.US, "Time left: %.1f s", secLeft), 11, FontWeight.Bold, c.warning)
     } else {
         // Show decimals (e.g. 2.3 s) while counting up
         val secs = tickMs / 1000.0
@@ -1242,16 +1242,17 @@ fun ResultsScreen(vm: TrainerViewModel) {
             Column(
                 Modifier.fillMaxWidth(),
                 horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(0.dp)
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 Text(
                     "STREAK", color = c.muted, fontSize = 12.sp,
-                    fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp
+                    fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp,
+                    lineHeight = 12.sp // Tighten the line height of the label
                 )
                 Row(verticalAlignment = Alignment.CenterVertically) {
-                    Txt("${r.best}", 48, FontWeight.ExtraBold, c.success, lineHeight = 54)
+                    Txt("${r.best}", 48, FontWeight.ExtraBold, c.success, lineHeight = 48) // Matches font size exactly
                     Spacer(Modifier.width(6.dp))
-                    Txt("🔥", 34)
+                    Txt("🔥", 34, lineHeight = 34) // Matches font size exactly
                 }
             }
 
@@ -1263,20 +1264,37 @@ fun ResultsScreen(vm: TrainerViewModel) {
 
         ReviewSection(r.missed)
 
-        GradientButton("Practice again", Modifier.fillMaxWidth()) { vm.startSession() }
         val currentCategory = Categories.all.firstOrNull { it.id == r.categoryId }
         if (currentCategory != null) {
-            SoftButton(
-                "View Progress", Modifier.fillMaxWidth(),
-                onClick = { vm.openCategoryDetail(currentCategory, fromResults = true) }
-            )
-            SoftButton(
-                "Back to Category", Modifier.fillMaxWidth(),
-                onClick = { vm.openCategory(currentCategory) }
-            )
+            // Row 1
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SoftButton(
+                    "View Progress", 
+                    Modifier.weight(1f),
+                    onClick = { vm.openCategoryDetail(currentCategory, fromResults = true) }
+                )
+                GradientButton(
+                    "Practice Again", 
+                    Modifier.weight(1f)
+                ) { vm.startSession() }
+            }
+            // Row 2
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SoftButton(
+                    "Back to Category", 
+                    Modifier.weight(1f),
+                    onClick = { vm.openCategory(currentCategory) }
+                )
+                SoftButton(
+                    "Main Menu", 
+                    Modifier.weight(1f)
+                ) { vm.toMenu() }
+            }
+        } else {
+            // Fallback just in case the category is somehow null
+            GradientButton("Practice Again", Modifier.fillMaxWidth()) { vm.startSession() }
+            SoftButton("Main Menu", Modifier.fillMaxWidth()) { vm.toMenu() }
         }
-        SoftButton("Back to menu", Modifier.fillMaxWidth()) { vm.toMenu() }
-    }
 }
 
 // Small stat: value on top (green), label underneath. Same font family and weights as the rest of the app.
@@ -1666,16 +1684,20 @@ fun CategoryProgressSection(
         }
 
         // Mastery breakdown (three stacked bars)
-        SectionTitle("Mastery")
-        MasteryBar("Mastered",   mastery.first,    c.success)
-        MasteryBar("Learning",   mastery.second,   c.warning)
-        MasteryBar("Struggling", mastery.third,    c.error)
+        Column(
+            Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            SectionTitle("Mastery")
+            MasteryBar("Mastered",   mastery.first,    c.success)
+            MasteryBar("Learning",   mastery.second,   c.warning)
+            MasteryBar("Struggling", mastery.third,    c.error)
+        }
 
         if (details.isNotEmpty()) {
             Column(
-                // Reduced bottom padding to bring the section closer to the charts
-                Modifier.fillMaxWidth().padding(top = 12.dp, bottom = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(12.dp)
+                Modifier.fillMaxWidth().padding(top = 4.dp),
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 SectionTitle("All Time Best")
                 val (strongTxt, weakTxt) = remember(mastery, details) { summarize(mastery, details) }

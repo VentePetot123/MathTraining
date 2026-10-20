@@ -568,6 +568,13 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
+    fun resetShowAnswer() {
+        val u = ui ?: return
+        if (u.showAnswer) {
+            ui = u.copy(showAnswer = false)
+        }
+    }
+
     private fun nextQuestion() {
         // FIX #10: if the user has left the training screen, do nothing — avoids
         // mutating results after navigation and prevents stray state writes.
@@ -594,8 +601,8 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
             feedback = Feedback.None, 
             hint = null, 
             seq = u.seq + 1, 
-            timedOut = false,
-            showAnswer = false // Resets the header back to the upcoming question number
+            timedOut = false
+            // We do NOT reset showAnswer here. The UI will do it when the card appears.
         )
     }
 

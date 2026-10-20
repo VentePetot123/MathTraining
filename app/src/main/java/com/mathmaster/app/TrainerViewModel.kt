@@ -24,6 +24,7 @@ data class UiSession(
     val categoryId: String,
     val total: Int,
     val answered: Int = 0,
+    val showAnswer: Boolean = false,
     val score: Int = 0,
     val streak: Int = 0,
     val best: Int = 0,
@@ -587,7 +588,15 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         liveTickMs = 0L
         stopTimer()
         timeoutJob?.cancel()
-        ui = u.copy(fact = f, input = "", feedback = Feedback.None, hint = null, seq = u.seq + 1, timedOut = false)
+        ui = u.copy(
+            fact = f, 
+            input = "", 
+            feedback = Feedback.None, 
+            hint = null, 
+            seq = u.seq + 1, 
+            timedOut = false,
+            showAnswer = false // Resets the header back to the upcoming question number
+        )
     }
 
     // FIX #8 — called by the UI once the entrance animation completes. Starts the
@@ -781,6 +790,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         timeoutJob?.cancel()
         ui = u.copy(
             answered = u.answered + 1,
+            showAnswer = true,
             score = u.score + if (verdict) 1 else 0,
             streak = streak,
             best = maxOf(u.best, streak),

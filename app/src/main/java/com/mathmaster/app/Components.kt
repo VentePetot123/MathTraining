@@ -403,13 +403,15 @@ fun TrendChart(
     modifier: Modifier = Modifier
 ) {
     if (history.size < 2) {
+        val c = AppTheme.colors
         Box(
             modifier.fillMaxWidth().height(96.dp)
                 .clip(RoundedCornerShape(14.dp))
-                .background(Color(0xFF1B2233)),
+                .background(c.surface)
+                .border(2.dp, c.accentA.copy(alpha = 0.4f), RoundedCornerShape(14.dp)),
             contentAlignment = Alignment.Center
         ) {
-            Txt("Finish 2 sessions to see your trend", 12, FontWeight.Medium, Color.White.copy(alpha = 0.6f))
+            Txt("Complete 2 Sessions to View Trends", 12, FontWeight.Medium, c.muted)
         }
         return
     }
@@ -471,7 +473,6 @@ private fun ChartPanel(
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(c.background)
-            .border(2.dp, color.copy(alpha = 0.6f), RoundedCornerShape(14.dp))
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally

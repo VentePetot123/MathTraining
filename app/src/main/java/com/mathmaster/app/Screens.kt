@@ -1210,7 +1210,9 @@ fun ResultsScreen(vm: TrainerViewModel) {
 
 // ---- Stats ----
         AppCard {
-            SectionTitle("Accuracy")
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SectionTitle("Accuracy")
+            }
             val showBarNumber = if (acc == 0) barStarted else barP.value > 0f
             AccuracyBar(
                 fraction = barP.value * acc / 100f,
@@ -1219,10 +1221,9 @@ fun ResultsScreen(vm: TrainerViewModel) {
                 brush = Brush.linearGradient(listOf(c.success.copy(alpha = 0.7f), c.success))
             )
             
-            Spacer(Modifier.height(4.dp))
-            
-            // ---- Time/Answer Bar ----
-            SectionTitle("Time/Answer")
+            Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(12.dp)) {
+                SectionTitle("Time/Answer")
+            }
             // Read the average time safely from the ResultsUi object
             val avgTimeMs = r.avgMs.toLong()
             val avgTimeSec = avgTimeMs / 1000f
@@ -1238,23 +1239,24 @@ fun ResultsScreen(vm: TrainerViewModel) {
                 suffix = "s" // Add an 's' to show seconds
             )
 
-            Spacer(Modifier.height(4.dp))
-
-            // Streak: no box, front and centre
-            Column(
+            // Streak: mathematically centered using a Box and baseline alignment
+            Box(
                 Modifier.fillMaxWidth(),
-                horizontalAlignment = Alignment.CenterHorizontally,
-                verticalArrangement = Arrangement.spacedBy(2.dp)
+                contentAlignment = Alignment.Center
             ) {
-                Text(
-                    "STREAK", color = c.muted, fontSize = 12.sp,
-                    fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp,
-                    lineHeight = 12.sp // Tighten the line height of the label
-                )
-                Row(verticalAlignment = Alignment.CenterVertically) {
-                    Txt("${r.best}", 48, FontWeight.ExtraBold, c.success, lineHeight = 48) // Matches font size exactly
-                    Spacer(Modifier.width(6.dp))
-                    Txt("🔥", 34, lineHeight = 34) // Matches font size exactly
+                Column(
+                    horizontalAlignment = Alignment.CenterHorizontally
+                ) {
+                    Text(
+                        "STREAK", color = c.muted, fontSize = 12.sp,
+                        fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp,
+                        lineHeight = 12.sp
+                    )
+                    Row {
+                        Txt("${r.best}", 48, FontWeight.ExtraBold, c.success, lineHeight = 48, modifier = Modifier.alignByBaseline())
+                        Spacer(Modifier.width(6.dp))
+                        Txt("🔥", 34, modifier = Modifier.alignByBaseline())
+                    }
                 }
             }
 
@@ -1262,11 +1264,8 @@ fun ResultsScreen(vm: TrainerViewModel) {
             Spacer(Modifier.height(12.dp))
 
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
-            }
-
-            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 MiniStat("Breakthroughs", "${r.improved}", Modifier.weight(1f))
-                MiniStat("New Facts", "${r.introduced}", Modifier.weight(1f))
+                MiniStat("New Questions", "${r.introduced}", Modifier.weight(1f))
             }
         }
 
@@ -1312,8 +1311,9 @@ private fun MiniStat(label: String, value: String, modifier: Modifier = Modifier
     val c = AppTheme.colors
     Column(
         modifier
-            .clip(RoundedCornerShape(16.dp)) // Clip the background to the shape
-            .themeBoxBackground(c)
+            .clip(RoundedCornerShape(16.dp))
+            .background(c.surfaceAlt)
+            .border(1.dp, c.borderColor, RoundedCornerShape(16.dp))
             .padding(vertical = 12.dp, horizontal = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp)
@@ -1694,7 +1694,7 @@ fun CategoryProgressSection(
 
         // Mastery breakdown (three stacked bars)
         Column(
-            Modifier.fillMaxWidth().padding(top = 2.dp), // Reduced top padding
+            Modifier.fillMaxWidth().offset(y = (-4).dp), // Pulls the entire block up to close the gap
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             SectionTitle("Mastery")

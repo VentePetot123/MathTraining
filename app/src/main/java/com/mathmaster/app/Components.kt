@@ -846,7 +846,7 @@ fun HighlightBox(title: String, value: String, color: Color, modifier: Modifier 
     val c = AppTheme.colors
     val empty = value == "No data yet" || value == "None yet"
     Column(
-        modifier.padding(top = 6.dp),
+        modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {

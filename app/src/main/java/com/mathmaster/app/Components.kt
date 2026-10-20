@@ -431,8 +431,10 @@ fun TrendChart(
             yMax = (step * 4).toFloat(),
             color = Color(0xFF9C27B0), // Purple color replacing red
             ticks = listOf("${step * 4}s", "${step * 3}s", "${step * 2}s", "${step}s", "0s"),
-            topRightText = "Fastest: ${String.format(java.util.Locale.US, "%.1f", minSec)}s   Slowest: ${String.format(java.util.Locale.US, "%.1f", maxSec)}s",
-            bottomText = null
+            topRightText = null,
+            bottomText = null,
+            fastest = String.format(java.util.Locale.US, "%.1f", minSec),
+            slowest = String.format(java.util.Locale.US, "%.1f", maxSec)
         )
     }
 }
@@ -445,7 +447,9 @@ private fun ChartPanel(
     color: Color,
     ticks: List<String>,          
     topRightText: String?,
-    bottomText: String?
+    bottomText: String?,
+    fastest: String? = null,
+    slowest: String? = null
 ) {
     val muted = Color.White.copy(alpha = 0.6f)
     val grid = Color.White.copy(alpha = 0.08f)
@@ -540,6 +544,26 @@ private fun ChartPanel(
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
+        } else if (fastest != null && slowest != null) {
+            // FIX: Grouped and horizontally centered at the bottom
+            Row(
+                Modifier.fillMaxWidth().padding(top = 6.dp),
+                horizontalArrangement = Arrangement.Center, // Centers the whole group
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Txt("Fastest: ", 11, FontWeight.Medium, muted)
+                    Txt("${fastest}s", 11, FontWeight.Bold, Color(0xFF3DD9A0))
+                }
+                
+                // Spacer to separate the two stats
+                Spacer(Modifier.width(24.dp)) 
+                
+                Row(verticalAlignment = Alignment.CenterVertically) {
+                    Txt("Slowest: ", 11, FontWeight.Medium, muted)
+                    Txt("${slowest}s", 11, FontWeight.Bold, Color(0xFFE64C8A))
+                }
+            }
         } else {
             Row(
                 Modifier.fillMaxWidth().padding(start = 38.dp),
@@ -979,7 +1003,7 @@ fun ProgressGlyph(modifier: Modifier = Modifier) {
 fun MenuSeparator(label: String) {
     val c = AppTheme.colors
     Row(
-        Modifier.fillMaxWidth().padding(top = 10.dp),
+        Modifier.fillMaxWidth().padding(top = 0.dp),
         verticalAlignment = Alignment.CenterVertically,
         horizontalArrangement = Arrangement.spacedBy(12.dp)
     ) {

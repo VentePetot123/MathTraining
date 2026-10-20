@@ -16,8 +16,6 @@ import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
-import androidx.compose.foundation.layout.BoxWithConstraints
-import androidx.compose.foundation.layout.requiredWidth
 import kotlin.math.roundToInt
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.PaddingValues
@@ -59,6 +57,8 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
+import androidx.compose.ui.graphics.drawscope.clipRect
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
@@ -1145,6 +1145,8 @@ fun ResultsScreen(vm: TrainerViewModel) {
     // Two separate animations: the hero score, then (after the confetti settles) the bar.
     val heroP = remember { Animatable(0f) }
     val barP = remember { Animatable(0f) }
+    var barStarted by remember { mutableStateOf(false) }
+    
     LaunchedEffect(Unit) {
         coroutineScope {
             launch {
@@ -1153,6 +1155,7 @@ fun ResultsScreen(vm: TrainerViewModel) {
             }
             launch {
                 delay(3300)                                  // confetti ends at ~2650ms
+                barStarted = true
                 barP.animateTo(1f, tween(1100, easing = FastOutSlowInEasing))
             }
         }
@@ -1198,7 +1201,12 @@ fun ResultsScreen(vm: TrainerViewModel) {
         // ---- Stats ----
         AppCard {
             SectionTitle("Accuracy")
-            AccuracyBar(fraction = barP.value * acc / 100f, percent = (barP.value * acc).roundToInt())
+            val showBarNumber = if (acc == 0) barStarted else barP.value > 0f
+            AccuracyBar(
+                fraction = barP.value * acc / 100f,
+                percent = (barP.value * acc).roundToInt(),
+                showNumber = showBarNumber
+            )
 
             Spacer(Modifier.height(4.dp))
 
@@ -1262,36 +1270,49 @@ private fun MiniStat(label: String, value: String, modifier: Modifier = Modifier
 
 // Thick accuracy bar with the % centered inside. The text is drawn twice: muted on the track,
 // white on the filled part (clipped to the fill), so it stays readable as the bar passes under it.
+// One number, centered in the bar. Drawn twice in the exact same spot: muted for the
+// empty part, white for the filled part (clipped at the fill edge), so a character the
+// fill is crossing shows both colors. Nothing is shown until the fill starts moving.
 @Composable
-private fun AccuracyBar(fraction: Float, percent: Int) {
+private fun AccuracyBar(fraction: Float, percent: Int, showNumber: Boolean) {
     val c = AppTheme.colors
     val pill = RoundedCornerShape(50)
-    BoxWithConstraints(
+    val f = fraction.coerceIn(0f, 1f)
+    val label = "$percent%"
+
+    Box(
         Modifier
             .fillMaxWidth()
             .height(38.dp)
             .clip(pill)
-            .background(c.surfaceAlt),
-        contentAlignment = Alignment.Center
+            .background(c.surfaceAlt)
     ) {
-        val fullWidth = maxWidth
-        Text("$percent%", color = c.muted, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
-
+        // Fill: gradient is laid out over the FULL bar width, then clipped, so it doesn't squash.
         Box(
             Modifier
-                .fillMaxHeight()
-                .fillMaxWidth(fraction.coerceIn(0f, 1f))
-                .align(Alignment.CenterStart)
-                .clip(pill)
-        ) {
+                .matchParentSize()
+                .drawBehind {
+                    clipRect(right = size.width * f) { drawRect(c.accent) }
+                }
+        )
+
+        if (showNumber) {
+            // Layer 1: number on the empty track
+            Box(Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
+                Text(label, color = c.muted, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+            }
+            // Layer 2: identical number in white, visible only over the filled part
             Box(
                 Modifier
-                    .requiredWidth(fullWidth)
-                    .fillMaxHeight()
-                    .background(c.accent),
+                    .matchParentSize()
+                    .drawWithContent {
+                        clipRect(left = 0f, top = 0f, right = size.width * f, bottom = size.height) {
+                            this@drawWithContent.drawContent()
+                        }
+                    },
                 contentAlignment = Alignment.Center
             ) {
-                Text("$percent%", color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                Text(label, color = Color.White, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
             }
         }
     }

@@ -715,33 +715,33 @@ fun Medal(color: Color, modifier: Modifier = Modifier) {
 
 // "Best Strength" / "Worse Weakness": medal + title on top, the fact in a rounded box below.
 @Composable
-fun HighlightBox(title: String, value: String, color: Color) {
+fun HighlightBox(title: String, value: String, color: Color, modifier: Modifier = Modifier) {
     val c = AppTheme.colors
     val empty = value == "No data yet" || value == "None yet"
     Column(
-        Modifier.fillMaxWidth().padding(top = 6.dp),
+        modifier.padding(top = 6.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Row(
             verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(8.dp)
+            horizontalArrangement = Arrangement.spacedBy(4.dp)
         ) {
             Medal(color)
-            Txt(title, 15, FontWeight.Bold, color)
-            Box(Modifier.size(26.dp))   // mirrors the medal so the title is truly centered
+            Txt(title, 13, FontWeight.Bold, color)
         }
         Box(
             Modifier
+                .fillMaxWidth()
                 .clip(RoundedCornerShape(14.dp))
                 .background(color.copy(alpha = 0.14f))
                 .border(1.dp, color.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
-                .padding(horizontal = 22.dp, vertical = 8.dp),
+                .padding(horizontal = 8.dp, vertical = 8.dp),
             contentAlignment = Alignment.Center
         ) {
             Txt(
                 value,
-                if (empty) 14 else 22,
+                if (empty) 12 else 16,
                 if (empty) FontWeight.Medium else FontWeight.ExtraBold,
                 if (empty) c.muted else c.onBackground,
                 align = TextAlign.Center

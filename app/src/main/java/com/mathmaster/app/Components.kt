@@ -75,6 +75,8 @@ import androidx.compose.ui.graphics.Shape
 import androidx.compose.ui.graphics.StrokeCap
 import androidx.compose.ui.graphics.StrokeJoin
 import androidx.compose.ui.graphics.drawscope.Stroke
+import androidx.compose.ui.graphics.drawscope.clipPath
+import androidx.compose.ui.graphics.drawscope.translate
 import androidx.compose.ui.graphics.graphicsLayer
 import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.foundation.LocalIndication
@@ -410,7 +412,9 @@ fun TrendChart(
     val accuracy = remember(history) { history.map { it.accuracyPct.toFloat().coerceIn(0f, 100f) } }
     val seconds = remember(history) { history.map { it.avgMs / 1000f } }
     val step = remember(seconds) {
-        kotlin.math.ceil((seconds.maxOrNull() ?: 1f) / 4.0).toInt().coerceAtLeast(1)
+        val maxVal = seconds.maxOrNull() ?: 1f
+        if (maxVal <= 4f) 1 
+        else kotlin.math.ceil(maxVal / 4.0).toInt().coerceAtLeast(2)
     }
 
     Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
@@ -713,9 +717,51 @@ fun Medal(color: Color, modifier: Modifier = Modifier) {
     }
 }
 
-// "Best Strength" / "Worse Weakness": medal + title on top, the fact in a rounded box below.
+// Broken crest: a shield split by a zigzag crack, halves slightly pulled apart.
 @Composable
-fun HighlightBox(title: String, value: String, color: Color, modifier: Modifier = Modifier) {
+fun BrokenCrest(color: Color, modifier: Modifier = Modifier) {
+    Canvas(modifier.size(26.dp)) {
+        val w = size.width
+        fun shield() = Path().apply {
+            moveTo(w * 0.10f, w * 0.10f)
+            lineTo(w * 0.90f, w * 0.10f)
+            lineTo(w * 0.90f, w * 0.52f)
+            cubicTo(w * 0.90f, w * 0.74f, w * 0.72f, w * 0.86f, w * 0.50f, w * 0.94f)
+            cubicTo(w * 0.28f, w * 0.86f, w * 0.10f, w * 0.74f, w * 0.10f, w * 0.52f)
+            close()
+        }
+        val crack = listOf(
+            Offset(w * 0.54f, 0f),
+            Offset(w * 0.42f, w * 0.26f),
+            Offset(w * 0.58f, w * 0.46f),
+            Offset(w * 0.44f, w * 0.68f),
+            Offset(w * 0.52f, w)
+        )
+        val leftRegion = Path().apply {
+            moveTo(0f, 0f)
+            crack.forEach { lineTo(it.x, it.y) }
+            lineTo(0f, w)
+            close()
+        }
+        val rightRegion = Path().apply {
+            moveTo(w, 0f)
+            crack.forEach { lineTo(it.x, it.y) }
+            lineTo(w, w)
+            close()
+        }
+        val dx = w * 0.035f
+        val dy = w * 0.04f
+        translate(left = -dx, top = -dy) {
+            clipPath(leftRegion) { drawPath(shield(), color) }
+        }
+        translate(left = dx, top = dy) {
+            clipPath(rightRegion) { drawPath(shield(), color.copy(alpha = 0.8f)) }
+        }
+    }
+}
+
+@Composable
+fun HighlightBox(title: String, value: String, color: Color, modifier: Modifier = Modifier, broken: Boolean = false) {
     val c = AppTheme.colors
     val empty = value == "No data yet" || value == "None yet"
     Column(
@@ -724,10 +770,12 @@ fun HighlightBox(title: String, value: String, color: Color, modifier: Modifier 
         verticalArrangement = Arrangement.spacedBy(6.dp)
     ) {
         Row(
-            verticalAlignment = Alignment.CenterVertically,
-            horizontalArrangement = Arrangement.spacedBy(4.dp)
+            Modifier.fillMaxWidth(),
+            horizontalArrangement = Arrangement.Center,
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Medal(color)
+            if (broken) BrokenCrest(color) else Medal(color)
+            Spacer(Modifier.width(4.dp))
             Txt(title, 13, FontWeight.Bold, color)
         }
         Box(
@@ -1024,6 +1072,118 @@ fun MenuSeparator(label: String) {
             Modifier.weight(1f).height(2.dp).clip(RoundedCornerShape(1.dp))
                 .background(Brush.horizontalGradient(listOf(c.accentA, Color.Transparent)))
         )
+    }
+}
+
+// ---------- Styled confirmation dialog ----------
+
+enum class DialogIcon { Exit, Warning }
+
+@Composable
+fun ConfirmDialog(
+    icon: DialogIcon,
+    title: String,
+    message: String,
+    confirmText: String,
+    cancelText: String = "Cancel",
+    step: Int? = null,
+    stepCount: Int = 2,
+    onConfirm: () -> Unit,
+    onDismiss: () -> Unit
+) {
+    val c = AppTheme.colors
+    val tint = c.error
+    val shape = RoundedCornerShape(28.dp)
+    val appear = remember { Animatable(0f) }
+    LaunchedEffect(Unit) { appear.animateTo(1f, tween(200, easing = FastOutSlowInEasing)) }
+
+    Dialog(
+        onDismissRequest = onDismiss,
+        properties = DialogProperties(usePlatformDefaultWidth = false)
+    ) {
+        Column(
+            Modifier
+                .padding(horizontal = 28.dp)
+                .fillMaxWidth()
+                .graphicsLayer {
+                    alpha = appear.value
+                    scaleX = 0.92f + 0.08f * appear.value
+                    scaleY = 0.92f + 0.08f * appear.value
+                }
+                .shadow(24.dp, shape)
+                .clip(shape)
+                .background(c.surface)
+                .border(1.dp, tint.copy(alpha = 0.30f), shape)
+                .padding(horizontal = 22.dp, vertical = 24.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(10.dp)
+        ) {
+            // Icon badge
+            Box(
+                Modifier.size(64.dp).clip(CircleShape).background(tint.copy(alpha = 0.15f)),
+                contentAlignment = Alignment.Center
+            ) {
+                Canvas(Modifier.size(30.dp)) {
+                    val w = size.width
+                    val sw = w * 0.10f
+                    if (icon == DialogIcon.Warning) {
+                        val tri = Path().apply {
+                            moveTo(w * 0.5f, w * 0.10f)
+                            lineTo(w * 0.94f, w * 0.86f)
+                            lineTo(w * 0.06f, w * 0.86f)
+                            close()
+                        }
+                        drawPath(tri, tint, style = Stroke(width = sw, cap = StrokeCap.Round, join = StrokeJoin.Round))
+                        drawLine(tint, Offset(w * 0.5f, w * 0.36f), Offset(w * 0.5f, w * 0.60f), sw, StrokeCap.Round)
+                        drawCircle(tint, w * 0.055f, Offset(w * 0.5f, w * 0.73f))
+                    } else {
+                        val door = Path().apply {
+                            moveTo(w * 0.50f, w * 0.14f)
+                            lineTo(w * 0.16f, w * 0.14f)
+                            lineTo(w * 0.16f, w * 0.86f)
+                            lineTo(w * 0.50f, w * 0.86f)
+                        }
+                        drawPath(door, tint, style = Stroke(width = sw, cap = StrokeCap.Round, join = StrokeJoin.Round))
+                        drawLine(tint, Offset(w * 0.38f, w * 0.50f), Offset(w * 0.86f, w * 0.50f), sw, StrokeCap.Round)
+                        val head = Path().apply {
+                            moveTo(w * 0.66f, w * 0.30f)
+                            lineTo(w * 0.86f, w * 0.50f)
+                            lineTo(w * 0.66f, w * 0.70f)
+                        }
+                        drawPath(head, tint, style = Stroke(width = sw, cap = StrokeCap.Round, join = StrokeJoin.Round))
+                    }
+                }
+            }
+
+            // Step marker for the two-step resets
+            if (step != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(6.dp)) {
+                    repeat(stepCount) { i ->
+                        Box(
+                            Modifier
+                                .height(6.dp)
+                                .width(if (i + 1 == step) 22.dp else 8.dp)
+                                .clip(RoundedCornerShape(3.dp))
+                                .background(if (i + 1 <= step) tint else c.surfaceAlt)
+                        )
+                    }
+                }
+            }
+
+            Txt(title, 21, FontWeight.ExtraBold, c.onBackground, align = TextAlign.Center)
+            Txt(message, 14, FontWeight.Medium, c.muted, align = TextAlign.Center, lineHeight = 19)
+            Box(Modifier.height(6.dp))
+
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                SoftButton(cancelText, Modifier.weight(1f), onClick = onDismiss)
+                GradientButton(
+                    confirmText,
+                    Modifier.weight(1f),
+                    brush = Brush.linearGradient(listOf(c.error, c.error.copy(alpha = 0.75f))),
+                    onClick = onConfirm
+                )
+            }
+        }
     }
 }
 

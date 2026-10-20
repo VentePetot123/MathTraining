@@ -93,6 +93,25 @@ import kotlin.math.cos
 import kotlin.random.Random
 
 @Composable
+fun GradientText(
+    text: String,
+    brush: Brush,
+    fontSize: TextUnit,
+    fontWeight: FontWeight = FontWeight.Bold,
+    modifier: Modifier = Modifier
+) {
+    Text(
+        text = text,
+        modifier = modifier,
+        style = TextStyle(
+            brush = brush,
+            fontSize = fontSize,
+            fontWeight = fontWeight
+        )
+    )
+}
+
+@Composable
 fun Txt(
     text: String,
     size: Int,

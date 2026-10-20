@@ -25,10 +25,6 @@ import androidx.compose.runtime.CompositionLocalProvider
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Modifier
-import androidx.compose.runtime.DisposableEffect
-import androidx.lifecycle.Lifecycle
-import androidx.lifecycle.LifecycleEventObserver
-import androidx.compose.ui.platform.LocalLifecycleOwner
 
 class MainActivity : ComponentActivity() {
     private val vm: TrainerViewModel by viewModels()
@@ -40,6 +36,16 @@ class MainActivity : ComponentActivity() {
                 AppRoot(vm)
             }
         }
+    }
+
+    override fun onPause() {
+        super.onPause()
+        vm.onAppBackground()      // Home button, screen off, app switcher
+    }
+
+    override fun onResume() {
+        super.onResume()
+        vm.onAppForeground()
     }
 
     override fun onStop() {
@@ -55,22 +61,6 @@ fun AppRoot(vm: TrainerViewModel) {
     val colors = AppTheme.colors
 
     val navLock = remember(vm) { { vm.isNavigating } }
-
-    // FIX: Pause the timer when the app goes to the background
-    val lifecycleOwner = LocalLifecycleOwner.current
-    DisposableEffect(lifecycleOwner) {
-        val observer = LifecycleEventObserver { _, event ->
-            when (event) {
-                Lifecycle.Event.ON_PAUSE -> vm.onAppBackground()
-                Lifecycle.Event.ON_RESUME -> vm.onAppForeground()
-                else -> Unit
-            }
-        }
-        lifecycleOwner.lifecycle.addObserver(observer)
-        onDispose {
-            lifecycleOwner.lifecycle.removeObserver(observer)
-        }
-    }
 
     // FIX #8: perf — ONE CompositionLocalProvider wraps the whole tree ...
     CompositionLocalProvider(LocalNavLock provides navLock) {

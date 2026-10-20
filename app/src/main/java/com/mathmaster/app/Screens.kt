@@ -8,11 +8,12 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.slideInVertically
+import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.background
+import androidx.compose.foundation.border
 import androidx.compose.foundation.clickable
 import androidx.compose.foundation.interaction.MutableInteractionSource
 import androidx.compose.foundation.interaction.collectIsPressedAsState
-import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Box
 import androidx.compose.foundation.layout.Column
@@ -28,51 +29,55 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.layout.width
 import androidx.compose.foundation.lazy.LazyColumn
-import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.grid.GridCells
 import androidx.compose.foundation.lazy.grid.GridItemSpan
 import androidx.compose.foundation.lazy.grid.LazyVerticalGrid
-import androidx.compose.foundation.LocalIndication
 import androidx.compose.foundation.lazy.grid.itemsIndexed
+import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
-import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableFloatStateOf
+import androidx.compose.runtime.mutableIntStateOf
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.rememberUpdatedState
-import androidx.compose.runtime.withFrameNanos
 import androidx.compose.runtime.setValue
-import androidx.compose.ui.unit.TextUnit
+import androidx.compose.runtime.withFrameNanos
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
-import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.alpha
+import androidx.compose.ui.draw.blur
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.graphicsLayer
-import androidx.compose.material3.Text
+import androidx.compose.ui.text.SpanStyle
+import androidx.compose.ui.text.buildAnnotatedString
+import androidx.compose.ui.text.font.FontStyle
 import androidx.compose.ui.text.font.FontWeight
-import androidx.compose.ui.text.style.TextOverflow
 import androidx.compose.ui.text.style.TextAlign
+import androidx.compose.ui.text.style.TextDecoration
+import androidx.compose.ui.text.style.TextOverflow
+import androidx.compose.ui.text.withStyle
+import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import java.util.Locale
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import java.util.Locale
 
 // =====================================================================
 // Loading screen
@@ -362,24 +367,114 @@ fun RangeScreen(vm: TrainerViewModel) {
 
         // Rounding rule — shown first so it can't be missed (Fractions/Decimals/% only)
         if (cat.id == "fdp") {
-            Row(
+            Column(
                 Modifier
                     .fillMaxWidth()
                     .clip(RoundedCornerShape(14.dp))
-                    .background(c.accentA.copy(alpha = 0.14f))
-                    .border(1.dp, c.accentA.copy(alpha = 0.45f), RoundedCornerShape(14.dp))
-                    .padding(horizontal = 12.dp, vertical = 10.dp),
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.spacedBy(10.dp)
+                    .background(c.accentA.copy(alpha = 0.10f))
+                    .border(1.dp, c.accentA.copy(alpha = 0.35f), RoundedCornerShape(14.dp))
+                    .padding(horizontal = 14.dp, vertical = 14.dp),
+                horizontalAlignment = Alignment.CenterHorizontally,
+                verticalArrangement = Arrangement.spacedBy(8.dp)
             ) {
-                Txt("ⓘ", 20, FontWeight.Bold, c.accentA)
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
-                    SectionTitle("Rounding rule")
-                    Txt("For repeating decimals (e.g., 2/3):", 12, FontWeight.SemiBold, c.muted)
-                    Txt("•  Decimal: 4 significant decimal places (0.6667)", 12, FontWeight.Medium, c.onBackground)
-                    Txt("•  Percentage: 2 significant decimal places (66.67%)", 12, FontWeight.Medium, c.onBackground)
-                    Txt("•  Standard rounding applies (≥5 rounds up)", 12, FontWeight.Medium, c.onBackground)
-                    Txt("Terminating decimals (0.25, 25%) require exact values.", 11, FontWeight.Normal, c.muted)
+                // Centered Title
+                Row(
+                    verticalAlignment = Alignment.CenterVertically,
+                    horizontalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Txt("ⓘ", 16, FontWeight.Bold, c.accentA)
+                    Text(
+                        text = "ROUNDING RULE",
+                        color = c.accentA,
+                        fontSize = 12.sp,
+                        fontWeight = FontWeight.ExtraBold,
+                        letterSpacing = 1.5.sp
+                    )
+                }
+
+                // Content
+                Column(
+                    Modifier.fillMaxWidth().padding(horizontal = 4.dp),
+                    verticalArrangement = Arrangement.spacedBy(6.dp)
+                ) {
+                    Txt(
+                        "For non-terminating rational numbers (e.g., 2/3):",
+                        12, FontWeight.SemiBold, c.accentA.copy(alpha = 0.85f)
+                    )
+
+                    // Indented bullet points
+                    Column(Modifier.padding(start = 8.dp), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                        Row {
+                            Txt("•  ", 12, FontWeight.Bold, c.accentA)
+                            Text(
+                                buildAnnotatedString {
+                                    withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, color = c.accentA)) {
+                                        append("Decimal: ")
+                                    }
+                                    withStyle(style = SpanStyle(fontWeight = FontWeight.Medium, color = c.onBackground)) {
+                                        append("4 decimal places ")
+                                    }
+                                    withStyle(style = SpanStyle(fontStyle = FontStyle.Italic, color = c.muted)) {
+                                        append("(e.g., 0.6667)")
+                                    }
+                                },
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp
+                            )
+                        }
+                        Row {
+                            Txt("•  ", 12, FontWeight.Bold, c.accentA)
+                            Text(
+                                buildAnnotatedString {
+                                    withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, color = c.accentA)) {
+                                        append("Percentage: ")
+                                    }
+                                    withStyle(style = SpanStyle(fontWeight = FontWeight.Medium, color = c.onBackground)) {
+                                        append("2 decimal places ")
+                                    }
+                                    withStyle(style = SpanStyle(fontStyle = FontStyle.Italic, color = c.muted)) {
+                                        append("(e.g., 66.67%)")
+                                    }
+                                },
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp
+                            )
+                        }
+                        Row {
+                            Txt("•  ", 12, FontWeight.Bold, c.accentA)
+                            Text(
+                                buildAnnotatedString {
+                                    withStyle(style = SpanStyle(fontWeight = FontWeight.Medium, color = c.onBackground)) {
+                                        append("Standard rounding ")
+                                    }
+                                    withStyle(style = SpanStyle(fontWeight = FontWeight.Bold, color = c.error)) {
+                                        append("(≥5 rounds up)")
+                                    }
+                                },
+                                fontSize = 12.sp,
+                                lineHeight = 16.sp
+                            )
+                        }
+                    }
+
+                    Spacer(Modifier.height(2.dp))
+
+                    Text(
+                        buildAnnotatedString {
+                            withStyle(style = SpanStyle(fontStyle = FontStyle.Italic, fontWeight = FontWeight.Medium, color = c.muted)) {
+                                append("Terminating rational numbers ")
+                            }
+                            withStyle(style = SpanStyle(textDecoration = TextDecoration.Underline, fontWeight = FontWeight.Bold, color = c.accentA)) {
+                                append("(e.g., 1/4 = 0.25 = 25%)")
+                            }
+                            withStyle(style = SpanStyle(fontStyle = FontStyle.Italic, fontWeight = FontWeight.Medium, color = c.muted)) {
+                                append(" require exact values.")
+                            }
+                        },
+                        fontSize = 11.sp,
+                        lineHeight = 15.sp,
+                        modifier = Modifier.padding(top = 4.dp)
+                    )
                 }
             }
         }

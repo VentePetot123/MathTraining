@@ -796,7 +796,7 @@ private fun LiveTimer(tickMs: Long, limitSec: Int) {
     if (leftMs <= 10000L && tickMs > 0) {
         // Show one decimal place for the final 10 seconds
         val secLeft = leftMs / 1000.0
-        Txt(String.format(Locale.US, "Time left: %.1f s", secLeft), 11, FontWeight.Bold, c.warning)
+        Txt(String.format(Locale.US, "Time Left: %.1f s", secLeft), 11, FontWeight.Bold, c.warning)
     } else {
         // Show decimals (e.g. 2.3 s) while counting up
         val secs = tickMs / 1000.0
@@ -1256,6 +1256,12 @@ fun ResultsScreen(vm: TrainerViewModel) {
                 }
             }
 
+            // Added spacing here to give the streak number room to breathe
+            Spacer(Modifier.height(12.dp))
+
+            Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+            }
+
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 MiniStat("Breakthroughs", "${r.improved}", Modifier.weight(1f))
                 MiniStat("New Facts", "${r.introduced}", Modifier.weight(1f))
@@ -1489,8 +1495,8 @@ fun ProgressScreen(vm: TrainerViewModel) {
         if (resetStep == 1) {
             ConfirmDialog(
                 icon = DialogIcon.Warning,
-                title = "Reset everything?",
-                message = "All categories will be wiped.",
+                title = "Reset Everything?",
+                message = "All Categories Will Be Wiped.",
                 confirmText = "Continue",
                 step = 1,
                 onConfirm = { resetStep = 2 },
@@ -1502,7 +1508,7 @@ fun ProgressScreen(vm: TrainerViewModel) {
                 icon = DialogIcon.Warning,
                 title = "Are you sure?",
                 message = "All progress will be erased. This can't be undone.",
-                confirmText = "Erase all",
+                confirmText = "Erase All",
                 step = 2,
                 onConfirm = { vm.resetAllProgress(); resetStep = 0 },
                 onDismiss = { resetStep = 0 }
@@ -1596,8 +1602,8 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
     if (resetStep == 1) {
         ConfirmDialog(
             icon = DialogIcon.Warning,
-            title = "Reset category?",
-            message = "${cat.name} stats and history will be erased.",
+            title = "Reset Category?",
+            message = "${cat.name} Stats and History Will Be Erased.",
             confirmText = "Continue",
             step = 1,
             onConfirm = { resetStep = 2 },
@@ -1607,8 +1613,8 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
     if (resetStep == 2) {
         ConfirmDialog(
             icon = DialogIcon.Warning,
-            title = "Are you sure?",
-            message = "This can't be undone.",
+            title = "Are You Sure?",
+            message = "This Can't Be Undone.",
             confirmText = "Reset",
             step = 2,
             onConfirm = { vm.resetSelectedCategory(); resetStep = 0 },
@@ -1686,7 +1692,7 @@ fun CategoryProgressSection(
 
         // Mastery breakdown (three stacked bars)
         Column(
-            Modifier.fillMaxWidth().padding(vertical = 4.dp),
+            Modifier.fillMaxWidth().padding(top = 2.dp), // Reduced top padding
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             SectionTitle("Mastery")
@@ -1698,7 +1704,7 @@ fun CategoryProgressSection(
         if (details.isNotEmpty()) {
             Column(
                 Modifier.fillMaxWidth().padding(top = 4.dp),
-                verticalArrangement = Arrangement.spacedBy(8.dp)
+                verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 SectionTitle("All Time Best")
                 val (strongTxt, weakTxt) = remember(mastery, details) { summarize(mastery, details) }

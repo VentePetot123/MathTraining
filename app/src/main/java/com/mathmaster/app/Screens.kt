@@ -296,11 +296,18 @@ fun CategoryCard(index: Int, cat: Category, s: CatSummary?, onClick: () -> Unit)
                     lineHeight = 18.sp
                 )
                 Spacer(Modifier.height(2.dp))
-                // FIX #8 — keep the "999+" formatter we added earlier. Claude's version
-                // reverted to the raw attempts count which can overflow on very high counts.
-                val stat = if (s == null || s.attempts == 0) "Not practiced yet"
-                else "${formatAttempts(s.attempts)} attempts · ${s.accuracyPct}% accuracy"
-                Txt(stat, 11, FontWeight.Medium, Color.White.copy(alpha = 0.9f))
+                // FIX: Right-aligned and stacked stats for better readability
+                Column(
+                    Modifier.fillMaxWidth(),
+                    horizontalAlignment = Alignment.End
+                ) {
+                    if (s == null || s.attempts == 0) {
+                        Txt("Not practiced yet", 11, FontWeight.Medium, Color.White.copy(alpha = 0.9f))
+                    } else {
+                        Txt("${formatAttempts(s.attempts)} Attempts", 11, FontWeight.Medium, Color.White.copy(alpha = 0.9f))
+                        Txt("${s.accuracyPct}% Accuracy", 11, FontWeight.Medium, Color.White.copy(alpha = 0.9f))
+                    }
+                }
             }
         }
     }
@@ -488,7 +495,14 @@ fun RangeScreen(vm: TrainerViewModel) {
 
         // ---- Number range card ----
         CompactCard {
-            Txt(if (cat.usesFractionKeys) "Denominator range" else "Number range", 15, FontWeight.Bold)
+            Txt(
+                text = if (cat.usesFractionKeys) "Denominators" else "Range",
+                size = 15,
+                weight = FontWeight.ExtraBold,
+                color = c.accentA,
+                modifier = Modifier.fillMaxWidth(),
+                align = TextAlign.Center
+            )
             // FIX #8 — hardMax passed so the dialog's title says "Enter value (1–30)"
             // for categories with a low limit (FDP, Powers, Factorials), and "Enter
             // value (1–99)" for the arithmetic categories. No more typing 100+ for
@@ -504,7 +518,14 @@ fun RangeScreen(vm: TrainerViewModel) {
 
         // ---- Questions per session card ----
         CompactCard {
-            Txt("Questions per session", 15, FontWeight.Bold)
+            Txt(
+                text = "Questions",
+                size = 15,
+                weight = FontWeight.ExtraBold,
+                color = c.accentA,
+                modifier = Modifier.fillMaxWidth(),
+                align = TextAlign.Center
+            )
             // FIX #8 — allow 3-digit input up to 200 for question count, while the
             // From/To range steppers keep the default 2-digit / 99 cap.
             Stepper(
@@ -639,10 +660,10 @@ fun TrainingScreen(vm: TrainerViewModel) {
                     .weight(1f)
                     .fillMaxWidth()
                     .zIndex(1f)
-                    .padding(16.dp)
+                    .padding(horizontal = 16.dp, vertical = 24.dp) // <-- Increased vertical padding
             ) {
                 Column(
-                    Modifier.align(Alignment.TopCenter).padding(top = 8.dp).verticalScroll(rememberScrollState())
+                    Modifier.align(Alignment.TopCenter).padding(top = 8.dp, bottom = 16.dp).verticalScroll(rememberScrollState())
                 ) {
                     // FIX #8: perf — the question card re-renders only when its own
                     // fields change. The keypad's `enabled` value is passed in as a
@@ -675,17 +696,14 @@ fun TrainingScreen(vm: TrainerViewModel) {
         }
 
         if (vm.showQuit) {
-            AlertDialog(
-                onDismissRequest = { vm.showQuit = false },
-                containerColor = c.surface,
-                title = { Text2("Leave this session?") },
-                text = { Text2("Answers so far are already saved.") },
-                confirmButton = {
-                    TextButton(onClick = { vm.quit() }) { Txt("Leave", 15, FontWeight.Bold, c.error) }
-                },
-                dismissButton = {
-                    TextButton(onClick = { vm.showQuit = false }) { Txt("Keep going", 15, FontWeight.Medium, c.muted) }
-                }
+            ConfirmDialog(
+                icon = DialogIcon.Exit,
+                title = "Leave session?",
+                message = "Your answers are saved.",
+                confirmText = "Leave",
+                cancelText = "Keep going",
+                onConfirm = { vm.quit() },
+                onDismiss = { vm.showQuit = false }
             )
         }
 
@@ -813,9 +831,9 @@ fun QuestionCard(u: UiSession, startedAt: Long = 0L, onShown: () -> Unit = {}) {
 
         // FIX: Gradient badge to indicate question type (FDP category only)
         val typeLabel = when (fact.kind) {
-            Kind.DEC -> "decimal"
-            Kind.FRAC -> "fraction"
-            Kind.PCT -> "percentage"
+            Kind.DEC -> "DECIMAL"
+            Kind.FRAC -> "FRACTION"
+            Kind.PCT -> "PERCENTAGE"
             else -> null
         }
         if (typeLabel != null) {
@@ -1240,33 +1258,25 @@ fun ProgressScreen(vm: TrainerViewModel) {
         vm.resetting?.let { label -> ResetOverlay(label) }
 
         if (resetStep == 1) {
-            AlertDialog(
-                onDismissRequest = { resetStep = 0 },
-                containerColor = c.surface,
-                title = { Text2("Reset ALL progress?") },
-                text = { Text2("Every category's stats, history, and mastery will be wiped. This cannot be undone.") },
-                confirmButton = {
-                    TextButton(onClick = { resetStep = 2 }) { Txt("Continue", 15, FontWeight.Bold, c.error) }
-                },
-                dismissButton = {
-                    TextButton(onClick = { resetStep = 0 }) { Txt("Cancel", 15, FontWeight.Medium, c.muted) }
-                }
+            ConfirmDialog(
+                icon = DialogIcon.Warning,
+                title = "Reset everything?",
+                message = "All categories will be wiped.",
+                confirmText = "Continue",
+                step = 1,
+                onConfirm = { resetStep = 2 },
+                onDismiss = { resetStep = 0 }
             )
         }
         if (resetStep == 2) {
-            AlertDialog(
-                onDismissRequest = { resetStep = 0 },
-                containerColor = c.surface,
-                title = { Text2("Are you absolutely sure?") },
-                text = { Text2("This is the second and final confirmation. Tap Reset to erase everything.") },
-                confirmButton = {
-                    TextButton(onClick = { vm.resetAllProgress(); resetStep = 0 }) {
-                        Txt("Reset", 15, FontWeight.Bold, c.error)
-                    }
-                },
-                dismissButton = {
-                    TextButton(onClick = { resetStep = 0 }) { Txt("Cancel", 15, FontWeight.Medium, c.muted) }
-                }
+            ConfirmDialog(
+                icon = DialogIcon.Warning,
+                title = "Are you sure?",
+                message = "All progress will be erased. This can't be undone.",
+                confirmText = "Erase all",
+                step = 2,
+                onConfirm = { vm.resetAllProgress(); resetStep = 0 },
+                onDismiss = { resetStep = 0 }
             )
         }
     }
@@ -1355,33 +1365,25 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
     }
 
     if (resetStep == 1) {
-        AlertDialog(
-            onDismissRequest = { resetStep = 0 },
-            containerColor = c.surface,
-            title = { Text2("Reset ${cat.name}?") },
-            text = { Text2("This category's stats and history will be erased.") },
-            confirmButton = {
-                TextButton(onClick = { resetStep = 2 }) { Txt("Continue", 15, FontWeight.Bold, c.error) }
-            },
-            dismissButton = {
-                TextButton(onClick = { resetStep = 0 }) { Txt("Cancel", 15, FontWeight.Medium, c.muted) }
-            }
+        ConfirmDialog(
+            icon = DialogIcon.Warning,
+            title = "Reset category?",
+            message = "${cat.name} stats and history will be erased.",
+            confirmText = "Continue",
+            step = 1,
+            onConfirm = { resetStep = 2 },
+            onDismiss = { resetStep = 0 }
         )
     }
     if (resetStep == 2) {
-        AlertDialog(
-            onDismissRequest = { resetStep = 0 },
-            containerColor = c.surface,
-            title = { Text2("Confirm reset") },
-            text = { Text2("Final confirmation. Tap Reset to wipe ${cat.name}.") },
-            confirmButton = {
-                TextButton(onClick = { vm.resetSelectedCategory(); resetStep = 0 }) {
-                    Txt("Reset", 15, FontWeight.Bold, c.error)
-                }
-            },
-            dismissButton = {
-                TextButton(onClick = { resetStep = 0 }) { Txt("Cancel", 15, FontWeight.Medium, c.muted) }
-            }
+        ConfirmDialog(
+            icon = DialogIcon.Warning,
+            title = "Are you sure?",
+            message = "This can't be undone.",
+            confirmText = "Reset",
+            step = 2,
+            onConfirm = { vm.resetSelectedCategory(); resetStep = 0 },
+            onDismiss = { resetStep = 0 }
         )
     }
 
@@ -1467,7 +1469,7 @@ fun CategoryProgressSection(
                 horizontalArrangement = Arrangement.spacedBy(8.dp)
             ) {
                 HighlightBox("Best Strength", strongTxt, c.success, Modifier.weight(1f))
-                HighlightBox("Worse Weakness", weakTxt, c.error, Modifier.weight(1f))
+                HighlightBox("Worst Weakness", weakTxt, c.error, Modifier.weight(1f), broken = true)
             }
         }
 

@@ -580,8 +580,8 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         // Each of . / % at most once; extra presses are ignored.
         if ((k == "." || k == "/" || k == "%") && u.input.contains(k)) return
         
-        // For percentages, the decimal point must come BEFORE the % sign.
-        if (k == "." && u.input.endsWith("%")) return
+        // FIX: No characters can be typed after a % sign.
+        if (u.input.endsWith("%")) return
         
         // "-" only as the very first character (Integers).
         if (k == "-" && u.input.isNotEmpty()) return

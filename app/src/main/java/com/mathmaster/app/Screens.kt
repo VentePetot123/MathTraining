@@ -1157,13 +1157,13 @@ fun ResultsScreen(vm: TrainerViewModel) {
     LaunchedEffect(Unit) {
         coroutineScope {
             launch {
-                delay(300)                                   // confetti starts at ~250ms
-                heroP.animateTo(1f, tween(1000, easing = FastOutSlowInEasing))
+                delay(300)                                   // hero starts counting at 300ms
+                heroP.animateTo(1f, tween(700, easing = FastOutSlowInEasing)) // Was 1000ms
             }
             launch {
-                delay(3300)                                  // confetti ends at ~2650ms
+                delay(2000)                                  // bars start filling at 2.0s
                 barStarted = true
-                barP.animateTo(1f, tween(1100, easing = FastOutSlowInEasing))
+                barP.animateTo(1f, tween(800, easing = FastOutSlowInEasing)) // Was 1100ms
             }
         }
     }
@@ -1295,6 +1295,7 @@ fun ResultsScreen(vm: TrainerViewModel) {
             GradientButton("Practice Again", Modifier.fillMaxWidth()) { vm.startSession() }
             SoftButton("Main Menu", Modifier.fillMaxWidth()) { vm.toMenu() }
         }
+    }
 }
 
 // Small stat: value on top (green), label underneath. Same font family and weights as the rest of the app.

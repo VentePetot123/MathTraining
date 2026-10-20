@@ -184,6 +184,8 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         private set
     var liveTickMs by mutableStateOf(0L)
         private set
+    private var isPaused = false
+    private var pausedAt = 0L
 
     // ---------- startup ----------
     suspend fun preload() = withContext(Dispatchers.Default) {
@@ -577,6 +579,24 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     // FIX #8 — called by the UI once the entrance animation completes. Starts the
     // session clock for this question, so the user is only timed for their actual
     // response time, not the card animation.
+    fun onAppBackground() {
+        if (!isPaused) {
+            isPaused = true
+            pausedAt = SystemClock.elapsedRealtime() - (runtime?.startedAt ?: 0L)
+        }
+    }
+
+    fun onAppForeground() {
+        if (isPaused) {
+            isPaused = false
+            val rt = runtime ?: return
+            // Shift the start time forward by how long we were paused
+            val now = SystemClock.elapsedRealtime()
+            rt.startedAt = now - pausedAt
+            questionStartedAt = rt.startedAt
+        }
+    }
+
     fun onQuestionShown() {
         val rt = runtime ?: return
         if (rt.startedAt != 0L) return
@@ -587,7 +607,11 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         timeoutJob?.cancel()
         timeoutJob = viewModelScope.launch {
             while (true) {
-                val elapsed = SystemClock.elapsedRealtime() - started
+                if (isPaused) {
+                    delay(100L)
+                    continue
+                }
+                val elapsed = SystemClock.elapsedRealtime() - started - pausedAt
                 liveTickMs = elapsed
                 val left = QUESTION_LIMIT_MS - elapsed
                 if (left <= 0L) break

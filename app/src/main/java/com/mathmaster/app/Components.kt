@@ -87,6 +87,10 @@ import androidx.compose.ui.text.font.FontWeight
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.TextUnit
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.layout.LastBaseline
+import androidx.compose.ui.unit.Constraints
+import kotlin.math.roundToInt
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.abs
@@ -778,6 +782,46 @@ fun FlameIcon(iconSize: Dp, modifier: Modifier = Modifier) {
                 startY = h * 0.45f, endY = h * 0.95f
             )
         )
+    }
+}
+
+// Text followed by a flame, with the flame vertically centered on the VISIBLE glyphs
+// (cap/digit height above the baseline), not on the text's padded line box. The
+// layout is also trimmed to the visible bounds, so surrounding spacing is even.
+@Composable
+fun TextWithFlame(
+    text: String,
+    size: Int,
+    weight: FontWeight,
+    color: Color,
+    flameSize: Dp,
+    modifier: Modifier = Modifier,
+    gap: Dp = 4.dp
+) {
+    Layout(
+        content = {
+            Txt(text, size, weight, color)
+            FlameIcon(flameSize)
+        },
+        modifier = modifier
+    ) { measurables, constraints ->
+        val gapPx = gap.roundToPx()
+        val flame = measurables[1].measure(Constraints())
+        val textMax = (constraints.maxWidth - flame.width - gapPx).coerceAtLeast(0)
+        val t = measurables[0].measure(Constraints(maxWidth = textMax))
+
+        val baseline = t[LastBaseline]
+        val cap = size.sp.toPx() * 0.72f            // digit / capital height
+        val textTop = baseline - cap
+        val flameTop = (baseline - cap / 2f) - flame.height / 2f
+
+        val minY = minOf(textTop, flameTop)
+        val maxY = maxOf(baseline.toFloat(), flameTop + flame.height)
+
+        layout(t.width + gapPx + flame.width, (maxY - minY).roundToInt()) {
+            t.placeRelative(0, (-minY).roundToInt())
+            flame.placeRelative(t.width + gapPx, (flameTop - minY).roundToInt())
+        }
     }
 }
 

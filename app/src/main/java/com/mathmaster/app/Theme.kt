@@ -34,7 +34,7 @@ data class AppColors(
     
     // A dedicated, theme-aware border color for light/dark modes
     val borderColor: Color
-        get() = if (isDark) Color.White.copy(alpha = 0.10f) else accentA.copy(alpha = 0.15f)
+        get() = if (isDark) Color.White.copy(alpha = 0.10f) else accentA.copy(alpha = 0.35f)
 }
 
 val LightColors = AppColors(

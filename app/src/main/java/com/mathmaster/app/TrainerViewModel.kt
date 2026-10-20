@@ -34,7 +34,10 @@ data class UiSession(
     val seq: Int = 0,
     val lastMs: Long = 0L,
     val hint: String? = null,
-    val timedOut: Boolean = false
+    val timedOut: Boolean = false,
+    // Question number shown in the header. Only nextQuestion() changes it, so it
+    // flips in the same frame the new card starts its entrance animation.
+    val questionNo: Int = 1
 )
 
 data class ResultsUi(
@@ -568,13 +571,6 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         }
     }
 
-    fun resetShowAnswer() {
-        val u = ui ?: return
-        if (u.showAnswer) {
-            ui = u.copy(showAnswer = false)
-        }
-    }
-
     private fun nextQuestion() {
         // FIX #10: if the user has left the training screen, do nothing — avoids
         // mutating results after navigation and prevents stray state writes.
@@ -601,8 +597,9 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
             feedback = Feedback.None, 
             hint = null, 
             seq = u.seq + 1, 
-            timedOut = false
-            // We do NOT reset showAnswer here. The UI will do it when the card appears.
+            timedOut = false,
+            showAnswer = false,
+            questionNo = u.answered + 1
         )
     }
 

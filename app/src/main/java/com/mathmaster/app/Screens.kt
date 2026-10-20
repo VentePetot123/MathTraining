@@ -373,14 +373,13 @@ fun RangeScreen(vm: TrainerViewModel) {
                 horizontalArrangement = Arrangement.spacedBy(10.dp)
             ) {
                 Txt("ⓘ", 20, FontWeight.Bold, c.accentA)
-                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(2.dp)) {
+                Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(3.dp)) {
                     Txt("Rounding rule", 13, FontWeight.Bold, c.onBackground)
-                    Txt(
-                        "Infinite decimals (like 1/3): type 4 decimal places, e.g. 0.3333. " +
-                            "Percentages: 2 decimal places, e.g. 33.33%.",
-                        12, FontWeight.Medium, c.muted,
-                        lineHeight = 15
-                    )
+                    Txt("For answers that never end (like 2/3):", 12, FontWeight.SemiBold, c.muted)
+                    Txt("•  Decimal: exactly 4 places → 0.6667", 12, FontWeight.Medium, c.onBackground)
+                    Txt("•  Percentage: exactly 2 places → 66.67%", 12, FontWeight.Medium, c.onBackground)
+                    Txt("•  Round normally: 5 or more rounds up", 12, FontWeight.Medium, c.onBackground)
+                    Txt("Exact answers (1/4 = 0.25 = 25%) need no rounding.", 11, FontWeight.Normal, c.muted)
                 }
             }
         }
@@ -563,12 +562,13 @@ fun TrainingScreen(vm: TrainerViewModel) {
             Keypad(
                 fractionKeys = cat.usesFractionKeys,
                 enabled = u.feedback == Feedback.None,
-                canSubmit = u.input.isNotEmpty(), // FIX: Only clickable when input exists
+                canSubmit = u.input.isNotEmpty(),
                 onKey = vm::onKey,
                 onDelete = vm::onDelete,
                 onClear = vm::onClear,
                 onSubmit = vm::submit,
-                signedKeys = (cat.id == "integers") // Show minus button for Integers
+                signedKeys = (cat.id == "integers"),
+                kind = u.fact?.kind
             )
         }
 
@@ -795,12 +795,13 @@ fun QuestionCard(u: UiSession, onShown: () -> Unit = {}) {
 fun Keypad(
     fractionKeys: Boolean,
     enabled: Boolean,
-    canSubmit: Boolean, // FIX: New parameter
+    canSubmit: Boolean,
     onKey: (String) -> Unit,
     onDelete: () -> Unit,
     onClear: () -> Unit,
     onSubmit: () -> Unit,
-    signedKeys: Boolean = false 
+    signedKeys: Boolean = false,
+    kind: Kind? = null
 ) {
     val onKeyLatest = rememberUpdatedState(onKey)
     val onDeleteLatest = rememberUpdatedState(onDelete)
@@ -814,7 +815,6 @@ fun Keypad(
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(8.dp)
     ) {
-        // ... (keep the 1-9, C, 0, ⌫ rows exactly as they are) ...
         listOf(listOf("1", "2", "3"), listOf("4", "5", "6"), listOf("7", "8", "9")).forEach { row ->
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 row.forEach { k ->
@@ -828,10 +828,13 @@ fun Keypad(
             KeyButtonRepeat("⌫", Modifier.weight(1f), enabled) { onDeleteLatest.value() }
         }
         if (fractionKeys) {
+            val dotOk = kind == Kind.DEC || kind == Kind.PCT
+            val slashOk = kind == Kind.FRAC
+            val pctOk = kind == Kind.PCT
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                KeyButton(".", Modifier.weight(1f), enabled) { onKeyLatest.value(".") }
-                KeyButton("/", Modifier.weight(1f), enabled) { onKeyLatest.value("/") }
-                KeyButton("%", Modifier.weight(1f), enabled) { onKeyLatest.value("%") }
+                KeyButton(".", Modifier.weight(1f).alpha(if (dotOk) 1f else 0.25f), enabled && dotOk) { onKeyLatest.value(".") }
+                KeyButton("/", Modifier.weight(1f).alpha(if (slashOk) 1f else 0.25f), enabled && slashOk) { onKeyLatest.value("/") }
+                KeyButton("%", Modifier.weight(1f).alpha(if (pctOk) 1f else 0.25f), enabled && pctOk) { onKeyLatest.value("%") }
             }
         } else if (signedKeys) {
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
@@ -840,8 +843,6 @@ fun Keypad(
                 Spacer(Modifier.weight(1f))
             }
         }
-        
-        // FIX: Submit button now dims/disables if `canSubmit` is false (empty input)
         GradientButton(
             "Submit",
             Modifier.fillMaxWidth(),

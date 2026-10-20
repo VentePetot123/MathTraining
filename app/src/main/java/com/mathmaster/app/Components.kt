@@ -87,6 +87,9 @@ import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
+import kotlin.math.abs
+import kotlin.math.cos
+import kotlin.random.Random
 
 @Composable
 fun Txt(
@@ -458,14 +461,16 @@ private fun ChartPanel(
     fastest: String? = null,
     slowest: String? = null
 ) {
-    val muted = Color.White.copy(alpha = 0.6f)
-    val grid = Color.White.copy(alpha = 0.08f)
+    val c = AppTheme.colors
+    val muted = c.muted
+    val grid = c.onBackground.copy(alpha = 0.08f)
 
     Column(
         Modifier
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
-            .background(Color(0xFF1B2233))
+            .background(c.background)
+            .border(2.dp, color.copy(alpha = 0.6f), RoundedCornerShape(14.dp))
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -484,7 +489,7 @@ private fun ChartPanel(
         if (topRightText != null) {
             Text(
                 text = topRightText,
-                color = Color.White.copy(alpha = 0.8f),
+                color = c.onBackground,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.Medium,
                 textAlign = TextAlign.Center,
@@ -560,7 +565,7 @@ private fun ChartPanel(
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Txt("Fastest: ", 11, FontWeight.Medium, muted)
-                    Txt("${fastest}s", 11, FontWeight.Bold, Color(0xFF3DD9A0))
+                    Txt("${fastest}s", 11, FontWeight.Bold, c.success)
                 }
                 
                 // Spacer to separate the two stats
@@ -568,7 +573,7 @@ private fun ChartPanel(
                 
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Txt("Slowest: ", 11, FontWeight.Medium, muted)
-                    Txt("${slowest}s", 11, FontWeight.Bold, Color(0xFFE64C8A))
+                    Txt("${slowest}s", 11, FontWeight.Bold, c.error)
                 }
             }
         } else {
@@ -1513,6 +1518,69 @@ fun MaxDigitsToast(
                 AppTheme.colors.onBackground,
                 align = TextAlign.Center
             )
+        }
+    }
+}
+
+// ---------- One-shot confetti burst ----------
+private class ConfettiPiece(
+    val vx: Float, val vy: Float,
+    val w: Float, val h: Float,
+    val phase: Float, val spin: Float,
+    val color: Color
+)
+
+@Composable
+fun ConfettiBurst(modifier: Modifier = Modifier, count: Int = 70, durationMs: Int = 2400) {
+    val palette = remember {
+        listOf(
+            Color(0xFFFFFFFF), Color(0xFFFFD93D), Color(0xFFFF6B9D),
+            Color(0xFF2EE6A8), Color(0xFF8B7CFF), Color(0xFFFF9F43)
+        )
+    }
+    val pieces = remember {
+        List(count) {
+            ConfettiPiece(
+                vx = Random.nextFloat() * 640f - 320f,
+                vy = -(260f + Random.nextFloat() * 460f),
+                w = 6f + Random.nextFloat() * 5f,
+                h = 9f + Random.nextFloat() * 6f,
+                phase = Random.nextFloat() * 6.28f,
+                spin = 4f + Random.nextFloat() * 8f,
+                color = palette[Random.nextInt(palette.size)]
+            )
+        }
+    }
+    val t = remember { Animatable(0f) }
+    var done by remember { mutableStateOf(false) }
+
+    LaunchedEffect(Unit) {
+        kotlinx.coroutines.delay(250)
+        t.animateTo(1f, tween(durationMs, easing = LinearEasing))
+        done = true
+    }
+    if (done) return
+
+    Canvas(modifier) {
+        val d = density
+        val secs = t.value * (durationMs / 1000f)
+        val gravity = 900f
+        val fade = (1f - (t.value - 0.7f) / 0.3f).coerceIn(0f, 1f)
+        if (t.value == 0f) return@Canvas
+
+        pieces.forEach { p ->
+            val x = size.width / 2f + p.vx * secs * d
+            val y = size.height * 0.55f + (p.vy * secs + 0.5f * gravity * secs * secs) * d
+            val flip = abs(cos(p.phase + p.spin * secs))
+            val pw = p.w * d * (0.25f + 0.75f * flip)
+            val ph = p.h * d
+            rotate(degrees = (p.phase + p.spin * secs) * 20f, pivot = Offset(x, y)) {
+                drawRect(
+                    color = p.color.copy(alpha = fade),
+                    topLeft = Offset(x - pw / 2f, y - ph / 2f),
+                    size = Size(pw, ph)
+                )
+            }
         }
     }
 }

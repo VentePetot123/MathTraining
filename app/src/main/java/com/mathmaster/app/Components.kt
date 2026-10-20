@@ -494,6 +494,7 @@ private fun ChartPanel(
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(c.background)
+            .border(2.dp, color.copy(alpha = 0.6f), RoundedCornerShape(14.dp)) // <-- Added border back
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
@@ -529,7 +530,8 @@ private fun ChartPanel(
                 Modifier.width(38.dp).fillMaxHeight().padding(vertical = 6.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                ticks.forEach { Txt(it, 10, FontWeight.Normal, muted) }
+                // Use onBackground instead of muted so the axis labels are clearly visible in Light Mode
+                ticks.forEach { Txt(it, 10, FontWeight.Medium, c.onBackground) }
             }
 
             Canvas(Modifier.weight(1f).fillMaxHeight()) {

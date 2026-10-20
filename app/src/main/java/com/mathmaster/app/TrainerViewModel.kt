@@ -570,14 +570,12 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         val u = ui ?: return
         if (u.feedback != Feedback.None) return
         if (u.input.length >= 160) return
-        
-        // FIX: ".", "/" and "%" can each appear only once per answer. 
-        // Note: mixing them is allowed (e.g., "33.33%"), but not typing the same one twice.
+        val kind = u.fact?.kind
+        if (k == "." && kind != Kind.DEC && kind != Kind.PCT) return
+        if (k == "/" && kind != Kind.FRAC) return
+        if (k == "%" && kind != Kind.PCT) return
         if ((k == "." || k == "/" || k == "%") && u.input.contains(k)) return
-        
-        // FIX: "-" can only be the first character.
         if (k == "-" && u.input.isNotEmpty()) return
-        
         ui = u.copy(input = u.input + k, hint = null)
     }
 
@@ -599,7 +597,18 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         val u = ui ?: return
         val f = u.fact ?: return
         val rt = runtime ?: return
-        if (u.feedback != Feedback.None || u.input.isEmpty()) return
+        if (u.feedback != Feedback.None || u.input.isEmpty()) return    fun onKey(k: String) {
+        val u = ui ?: return
+        if (u.feedback != Feedback.None) return
+        if (u.input.length >= 160) return
+        val kind = u.fact?.kind
+        if (k == "." && kind != Kind.DEC && kind != Kind.PCT) return
+        if (k == "/" && kind != Kind.FRAC) return
+        if (k == "%" && kind != Kind.PCT) return
+        if ((k == "." || k == "/" || k == "%") && u.input.contains(k)) return
+        if (k == "-" && u.input.isNotEmpty()) return
+        ui = u.copy(input = u.input + k, hint = null)
+    }
 
         val problem = Grading.check(f, u.input)
         if (problem != null) {

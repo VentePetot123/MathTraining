@@ -282,7 +282,8 @@ fun GradientProgressBar(
     progress: Float,
     modifier: Modifier = Modifier,
     animate: Boolean = true,
-    height: Dp = 12.dp
+    height: Dp = 12.dp,
+    brush: Brush = AppTheme.colors.accent
 ) {
     val animated by animateFloatAsState(
         targetValue = progress.coerceIn(0f, 1f),
@@ -302,7 +303,7 @@ fun GradientProgressBar(
                 .fillMaxHeight()
                 .fillMaxWidth(animated)
                 .clip(pill)
-                .background(AppTheme.colors.accent)
+                .background(brush)
         )
     }
 }

@@ -244,16 +244,16 @@ private fun genFdp(lo0: Int, hi0: Int): List<Fact> {
         val pctNote = if (isInfinite) "Never ends: round to 2 decimal places" else null
 
         map["$frac → %"] = Fact(
-            "$frac → %", "$frac = ? (percentage)", pct, "$frac $eq $pct",
+            "$frac → %", "$frac = ?", pct, "$frac $eq $pct",
             Kind.PCT, pctNote, isInfinite
         )
         map["$frac → dec"] = Fact(
-            "$frac → dec", "$frac = ? (decimal)", dec, "$frac $eq $dec",
+            "$frac → dec", "$frac = ?", dec, "$frac $eq $dec",
             Kind.DEC, decNote, isInfinite
         )
         if (!map.containsKey("$pct → frac")) {
             map["$pct → frac"] = Fact(
-                "$pct → frac", "$pct = ? (fraction)", frac, "$pct $eq $frac",
+                "$pct → frac", "$pct = ?", frac, "$pct $eq $frac",
                 Kind.FRAC
             )
         }

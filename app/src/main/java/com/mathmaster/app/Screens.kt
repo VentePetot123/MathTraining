@@ -1302,9 +1302,14 @@ private fun AccuracyBar(fraction: Float, percent: Int, showNumber: Boolean) {
         )
 
         if (showNumber) {
-            // Layer 1: number on the empty track
+            // Layer 1: number on the empty track, using the gradient accent
             Box(Modifier.matchParentSize(), contentAlignment = Alignment.Center) {
-                Text(label, color = c.muted, fontSize = 17.sp, fontWeight = FontWeight.ExtraBold)
+                GradientText(
+                    text = label,
+                    brush = c.accent,
+                    fontSize = 17.sp,
+                    fontWeight = FontWeight.ExtraBold
+                )
             }
             // Layer 2: identical number in white, visible only over the filled part
             Box(

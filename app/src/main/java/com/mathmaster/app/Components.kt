@@ -112,6 +112,10 @@ fun GradientText(
     )
 }
 
+fun Modifier.themeBoxBackground(c: AppColors): Modifier = this
+    .background(c.surfaceAlt)
+    .border(1.dp, c.borderColor, RoundedCornerShape(16.dp))
+
 @Composable
 fun Txt(
     text: String,
@@ -222,6 +226,7 @@ fun SoftButton(
     size: Int = 15,
     onClick: () -> Unit
 ) {
+    val c = AppTheme.colors
     // FIX #8: perf — fixed 48dp height, matching GradientButton. Padding is applied
     // horizontally only; vertical space comes from the height constraint. This makes
     // the two buttons pixel-identical in height when paired in a Row.
@@ -230,6 +235,7 @@ fun SoftButton(
             .height(48.dp)
             .bounceClick(RoundedCornerShape(14.dp), 0.dp, onClick = onClick)
             .background(container)
+            .then(if (!c.isDark && container == c.surfaceAlt) Modifier.border(1.dp, c.accentA.copy(alpha = 0.10f), RoundedCornerShape(14.dp)) else Modifier)
             .padding(horizontal = 14.dp),
         contentAlignment = Alignment.Center
     ) {
@@ -429,7 +435,8 @@ fun TrendChart(
             modifier.fillMaxWidth().height(96.dp)
                 .clip(RoundedCornerShape(14.dp))
                 .background(c.surface)
-                .border(2.dp, c.accentA.copy(alpha = 0.4f), RoundedCornerShape(14.dp)),
+                .border(2.dp, c.accentA.copy(alpha = 0.4f), RoundedCornerShape(14.dp))
+                .then(if (!c.isDark) Modifier.border(1.dp, c.accentA.copy(alpha = 0.10f), RoundedCornerShape(14.dp)) else Modifier),
             contentAlignment = Alignment.Center
         ) {
             Txt("Complete 2 Sessions to View Trends", 12, FontWeight.Medium, c.muted)
@@ -1389,6 +1396,7 @@ fun NumberInputDialog(
                     .height(64.dp)
                     .clip(RoundedCornerShape(12.dp))
                     .background(c.surfaceAlt)
+                    .then(if (!c.isDark) Modifier.border(1.dp, c.accentA.copy(alpha = 0.10f), RoundedCornerShape(12.dp)) else Modifier)
                     // FIX #8: perf — tapping anywhere in the field requests focus on
                     // the BasicTextField. Without this, taps on the padding (or the
                     // box's outside area) do nothing; the user had to tap precisely

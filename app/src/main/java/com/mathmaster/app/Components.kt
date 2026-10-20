@@ -408,27 +408,31 @@ fun TrendChart(
     val n = history.size
     val accuracy = remember(history) { history.map { it.accuracyPct.toFloat().coerceIn(0f, 100f) } }
     val seconds = remember(history) { history.map { it.avgMs / 1000f } }
-    // Round the time axis up to a multiple of 4 so all five labels are whole seconds.
     val step = remember(seconds) {
         kotlin.math.ceil((seconds.maxOrNull() ?: 1f) / 4.0).toInt().coerceAtLeast(1)
     }
 
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
         ChartPanel(
-            title = "Accuracy · last $n sessions",
+            title = "ACCURACY",
             values = accuracy,
             yMax = 100f,
             color = Color(0xFF3DD9A0),
             ticks = listOf("100%", "75%", "50%", "25%", "0%"),
-            latest = "${accuracy.last().toInt()}%"
+            topRightText = null,
+            bottomText = "Sessions: $n"
         )
+        
+        val maxSec = seconds.maxOrNull() ?: 0f
+        val minSec = seconds.minOrNull() ?: 0f
         ChartPanel(
-            title = "Time per answer · lower is better",
+            title = "TIME/ANSWER",
             values = seconds,
             yMax = (step * 4).toFloat(),
-            color = Color(0xFFE64C8A),
+            color = Color(0xFF9C27B0), // Purple color replacing red
             ticks = listOf("${step * 4}s", "${step * 3}s", "${step * 2}s", "${step}s", "0s"),
-            latest = String.format(java.util.Locale.US, "%.1fs", seconds.last())
+            topRightText = "Fastest: ${String.format(java.util.Locale.US, "%.1f", minSec)}s   Slowest: ${String.format(java.util.Locale.US, "%.1f", maxSec)}s",
+            bottomText = null
         )
     }
 }
@@ -439,8 +443,9 @@ private fun ChartPanel(
     values: List<Float>,
     yMax: Float,
     color: Color,
-    ticks: List<String>,          // top → bottom, 5 labels
-    latest: String
+    ticks: List<String>,          
+    topRightText: String?,
+    bottomText: String?
 ) {
     val muted = Color.White.copy(alpha = 0.6f)
     val grid = Color.White.copy(alpha = 0.08f)
@@ -451,11 +456,29 @@ private fun ChartPanel(
             .clip(RoundedCornerShape(14.dp))
             .background(Color(0xFF1B2233))
             .padding(12.dp),
-        verticalArrangement = Arrangement.spacedBy(6.dp)
+        verticalArrangement = Arrangement.spacedBy(12.dp),
+        horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.SpaceBetween) {
-            Txt(title, 11, FontWeight.SemiBold, color)
-            Txt("Latest $latest", 11, FontWeight.Bold, Color.White)
+        // Centered Title
+        Text(
+            text = title,
+            color = color,
+            fontSize = 12.sp,
+            fontWeight = FontWeight.ExtraBold,
+            letterSpacing = 1.5.sp,
+            textAlign = TextAlign.Center,
+            modifier = Modifier.fillMaxWidth()
+        )
+
+        if (topRightText != null) {
+            Text(
+                text = topRightText,
+                color = Color.White.copy(alpha = 0.8f),
+                fontSize = 11.sp,
+                fontWeight = FontWeight.Medium,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
         }
 
         Row(Modifier.fillMaxWidth().height(110.dp)) {
@@ -508,12 +531,23 @@ private fun ChartPanel(
             }
         }
 
-        Row(
-            Modifier.fillMaxWidth().padding(start = 38.dp),
-            horizontalArrangement = Arrangement.SpaceBetween
-        ) {
-            Txt("Oldest", 10, FontWeight.Normal, muted)
-            Txt("Latest", 10, FontWeight.Normal, muted)
+        if (bottomText != null) {
+            Text(
+                text = bottomText,
+                color = Color(0xFF3DD9A0), // Green color matching accuracy
+                fontSize = 11.sp,
+                fontWeight = FontWeight.SemiBold,
+                textAlign = TextAlign.Center,
+                modifier = Modifier.fillMaxWidth()
+            )
+        } else {
+            Row(
+                Modifier.fillMaxWidth().padding(start = 38.dp),
+                horizontalArrangement = Arrangement.SpaceBetween
+            ) {
+                Txt("Oldest", 10, FontWeight.Normal, muted)
+                Txt("Latest", 10, FontWeight.Normal, muted)
+            }
         }
     }
 }

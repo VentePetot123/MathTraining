@@ -932,8 +932,8 @@ fun QuestionCard(u: UiSession, liveTickMs: Long = 0L, onShown: () -> Unit = {}) 
         // Digits per line: smaller text fits more per row, so long answers use fewer lines.
         val perLine = when {
             len <= 40 -> 20   // up to 2 lines
-            len <= 80 -> 27   // up to 3 lines
-            else -> 32        // up to 5 lines (160 digits)
+            len <= 80 -> 28   // up to 3 lines (increased from 27)
+            else -> 34        // up to 5 lines (increased from 32)
         }
         Box(
             Modifier
@@ -994,7 +994,7 @@ fun QuestionCard(u: UiSession, liveTickMs: Long = 0L, onShown: () -> Unit = {}) 
                             FeedbackMark(ok, u.seq, Modifier.size(22.dp))
                             val longAns = fact.answer.length > 14
                             Text(
-                                text = if (longAns) fact.answer.chunked(32).joinToString("\n") else fact.answer,
+                                text = if (longAns) fact.answer.chunked(34).joinToString("\n") else fact.answer,
                                 color = resultColor,
                                 fontSize = (if (longAns) 13 else 20).sp,
                                 lineHeight = (if (longAns) 18 else 24).sp,
@@ -1258,7 +1258,7 @@ fun ResultsScreen(vm: TrainerViewModel) {
             Column(
                 Modifier
                     .fillMaxWidth()
-                    .padding(vertical = 8.dp),   // <-- adds equal space above and below
+                    .padding(vertical = 24.dp),   // <-- adds equal space above and below
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {

@@ -670,7 +670,7 @@ fun TrainingScreen(vm: TrainerViewModel) {
             // Compose skips recomposition when the values haven't changed, typing a
             // digit (which only changes u.input) does NOT recompose the header.
             HeaderBar(
-                answered = u.answered,
+                answered = u.questionNo - 1,
                 total = u.total,
                 score = u.score,
                 streak = u.streak,
@@ -710,10 +710,7 @@ fun TrainingScreen(vm: TrainerViewModel) {
                         // the entrance animation finishes (see LaunchedEffect inside
                         // QuestionCard). This ensures the timer measures only the
                         // user's thinking time, not the animation duration.
-                        QuestionCard(u, liveTickMs = vm.liveTickMs) { 
-                            vm.onQuestionShown() 
-                            vm.resetShowAnswer() // <--- Resets the header to Q2 right as the card slides in
-                        }
+                        QuestionCard(u, liveTickMs = vm.liveTickMs) { vm.onQuestionShown() }
                     }
                 }
             }
@@ -780,8 +777,11 @@ private fun HeaderBar(
         Column(horizontalAlignment = Alignment.End) {
             // If we just submitted, show the current question number. 
             // Otherwise, show the upcoming one.
-            val displayQ = if (showAnswer) answered else minOf(answered + 1, total)
-            Txt("Q ${minOf(answered + 1, total)}/$total", 17, FontWeight.Bold)
+            // answered here is questionNo - 1.
+            // - During feedback: questionNo is still 1, so answered = 0, displayQ = 1.
+            // - After nextQuestion: questionNo is 2, so answered = 1, displayQ = 2.
+            val displayQ = minOf(answered + 1, total)
+            Txt("Q $displayQ/$total", 17, FontWeight.Bold)
             TextWithFlame(
                 "Score $score · Streak $streak",
                 12, FontWeight.Medium, c.muted,

@@ -173,9 +173,11 @@ fun MenuScreen(vm: TrainerViewModel) {
         item(key = "progress", span = { GridItemSpan(maxLineSpan) }, contentType = "progress") {
             MenuHeader(vm) { vm.openProgress() }
         }
-        item(key = "welcome", span = { GridItemSpan(maxLineSpan) }, contentType = "welcome") { WelcomeMessage() }
-        item(key = "separator", span = { GridItemSpan(maxLineSpan) }, contentType = "separator") {
-            MenuSeparator("Categories")
+        item(key = "welcome", span = { GridItemSpan(maxLineSpan) }, contentType = "welcome") {
+            Column(verticalArrangement = Arrangement.spacedBy(14.dp)) {
+                WelcomeMessage()
+                MenuSeparator("Categories")
+            }
         }
         itemsIndexed(Categories.all, contentType = { _, _ -> "category" }) { index, cat ->
             CategoryCard(index, cat, vm.menuStats[cat.id]) { vm.openCategory(cat) }
@@ -787,6 +789,33 @@ fun QuestionCard(u: UiSession, onShown: () -> Unit = {}) {
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(16.dp)
     ) {
+
+        // FIX: Gradient badge to indicate question type (FDP category only)
+        val typeLabel = when (fact.kind) {
+            Kind.DEC -> "decimal"
+            Kind.FRAC -> "fraction"
+            Kind.PCT -> "percentage"
+            else -> null
+        }
+        if (typeLabel != null) {
+            Box(
+                Modifier
+                    .padding(bottom = 4.dp)
+                    .clip(RoundedCornerShape(8.dp))
+                    .background(c.surfaceAlt.copy(alpha = 0.5f))
+                    .padding(horizontal = 12.dp, vertical = 4.dp)
+            ) {
+                Text(
+                    text = typeLabel,
+                    fontSize = 11.sp,
+                    fontWeight = FontWeight.ExtraBold,
+                    letterSpacing = 2.sp,
+                    style = TextStyle(
+                        brush = Brush.linearGradient(listOf(c.accentA, c.accentB))
+                    )
+                )
+            }
+        }
 
         Text(
             text = fact.prompt,
@@ -1402,10 +1431,12 @@ fun CategoryProgressSection(
         MasteryBar("Learning",   mastery.second,   c.warning)
         MasteryBar("Struggling", mastery.third,    c.error)
 
-        SectionTitle("All Time Best")
-        val (strongTxt, weakTxt) = remember(mastery, details) { summarize(mastery, details) }
-        HighlightBox("Best Strength", strongTxt, c.success)
-        HighlightBox("Worse Weakness", weakTxt, c.error)
+        if (details.isNotEmpty()) {
+            SectionTitle("All Time Best")
+            val (strongTxt, weakTxt) = remember(mastery, details) { summarize(mastery, details) }
+            HighlightBox("Best Strength", strongTxt, c.success)
+            HighlightBox("Worse Weakness", weakTxt, c.error)
+        }
 
         if (detailed) {
             SectionTitle("Accuracy & Speed Chart")
@@ -1426,20 +1457,10 @@ fun CategoryProgressSection(
                     )
             }
 
-            // FIX: Only show table if data exists, otherwise show "No Data"
-            if (sortedByCorrect.isEmpty()) {
-                SectionTitle("Strength List")
-                Txt("No Data", 14, FontWeight.Medium, Color.White, Modifier.fillMaxWidth().padding(vertical = 8.dp), TextAlign.Center)
-            } else {
-                RankTable("Strength List", sortedByCorrect, strong = true)
-            }
-
-            if (sortedByWrong.isEmpty()) {
-                SectionTitle("Weakness List")
-                Txt("No Data", 14, FontWeight.Medium, Color.White, Modifier.fillMaxWidth().padding(vertical = 8.dp), TextAlign.Center)
-            } else {
-                RankTable("Weakness List", sortedByWrong, strong = false)
-            }
+            // RankTable already checks for empty lists internally and returns nothing, 
+            // so we don't need manual empty state checks here.
+            RankTable("Strength List", sortedByCorrect, strong = true)
+            RankTable("Weakness List", sortedByWrong, strong = false)
         }
     }
 }
@@ -1481,12 +1502,12 @@ private fun summarize(
     val strong = when {
         best != null -> best
         details.any { it.correct > 0 } -> "None yet"
-        else -> "No data yet"
+        else -> "No Data"
     }
     val weak = when {
         worst != null -> worst
         details.any { it.incorrect > 0 } -> "None yet"
-        else -> "No data yet"
+        else -> "No Data"
     }
     return strong to weak
 }

@@ -1086,7 +1086,8 @@ fun KeyButton(label: String, modifier: Modifier, enabled: Boolean, onClick: () -
                 enabled = enabled,
                 onClick = { latest.value() }
             )
-            .background(bg),
+            .background(bg)
+            .then(if (!c.isDark && bg == c.surfaceAlt) Modifier.border(1.dp, c.accentA.copy(alpha = 0.10f), RoundedCornerShape(14.dp)) else Modifier),
         contentAlignment = Alignment.Center
     ) {
         Txt(label, 22, FontWeight.SemiBold, c.onBackground)
@@ -1127,7 +1128,8 @@ fun KeyButtonRepeat(label: String, modifier: Modifier, enabled: Boolean, onClick
                 enabled = enabled,
                 onClick = { latest.value() }
             )
-            .background(bg),
+            .background(bg)
+            .then(if (!c.isDark && bg == c.surfaceAlt) Modifier.border(1.dp, c.accentA.copy(alpha = 0.10f), RoundedCornerShape(14.dp)) else Modifier),
         contentAlignment = Alignment.Center
     ) {
         Txt(label, 22, FontWeight.SemiBold, c.onBackground)
@@ -1310,8 +1312,8 @@ private fun MiniStat(label: String, value: String, modifier: Modifier = Modifier
     val c = AppTheme.colors
     Column(
         modifier
-            .clip(RoundedCornerShape(16.dp))
-            .background(c.surfaceAlt)
+            .clip(RoundedCornerShape(16.dp)) // Clip the background to the shape
+            .themeBoxBackground(c)
             .padding(vertical = 12.dp, horizontal = 8.dp),
         horizontalAlignment = Alignment.CenterHorizontally,
         verticalArrangement = Arrangement.spacedBy(2.dp)

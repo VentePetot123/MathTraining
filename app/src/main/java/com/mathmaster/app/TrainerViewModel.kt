@@ -615,7 +615,8 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         if (isPaused) return
         isPaused = true
         if (timerActive && segmentStart != 0L) {
-            accumulatedMs += SystemClock.elapsedRealtime() - segmentStart
+            val delta = SystemClock.elapsedRealtime() - segmentStart
+            if (delta > 0) accumulatedMs += delta   // negative delta = still in grace; ignore
             segmentStart = 0L
         }
     }
@@ -624,13 +625,17 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         if (!isPaused) return
         isPaused = false
         if (timerActive && segmentStart == 0L) {
-            // If the pause happened during the grace window, we lost track of
-            // the original startAt. Recompute it from the original questionStartedAt
-            // so the user still gets the remaining grace. If we're already past
-            // the grace window, this sets segmentStart to "now" as before.
+            // Restore segmentStart. If we were in the grace period when paused,
+            // questionStartedAt is still in the future → use it, preserving the
+            // grace. If we were counting when paused, questionStartedAt is in the
+            // past → use "now" so the pause time isn't counted.
             val now = SystemClock.elapsedRealtime()
             val originalStart = questionStartedAt
             segmentStart = if (now < originalStart) originalStart else now
+            // Also guarantee accumulatedMs is never negative — if a stray
+            // onAppBackground during the grace window subtracted a negative
+            // delta, clamp it back to 0.
+            if (accumulatedMs < 0L) accumulatedMs = 0L
         }
     }
 
@@ -639,15 +644,18 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         if (rt.startedAt != 0L) return
         val seq = ui?.seq ?: return
         val now = SystemClock.elapsedRealtime()
-        // Grace period: the entrance animation just ended, but we give the user
-        // SETTLE_MS to actually read the question before we start counting.
-        // segmentStart is set in the FUTURE, so currentElapsedMs() returns 0
-        // until that moment — no need for a separate "not started yet" state.
+        // Grace period: starts AFTER the animation, and is guaranteed by a
+        // FUTURE segmentStart — currentElapsedMs() clamps to 0 until then.
+        // We do NOT consult isPaused here: if the app is paused, onAppBackground
+        // would have already frozen any running timer. Setting segmentStart to
+        // the future startAt unconditionally, and letting onAppForeground() /
+        // onAppBackground() adjust it, is strictly safer than branching on
+        // isPaused in this method.
         val startAt = now + SETTLE_MS
-        rt.startedAt = startAt          // still used as the "already started" guard
+        rt.startedAt = startAt
         questionStartedAt = startAt
         accumulatedMs = 0L
-        segmentStart = if (isPaused) 0L else startAt
+        segmentStart = startAt            // ← ALWAYS the future startAt, never 0
         timerActive = true
         timeoutJob?.cancel()
         timeoutJob = viewModelScope.launch {
@@ -656,7 +664,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
                 liveTickMs = elapsed
                 val left = QUESTION_LIMIT_MS - elapsed
                 if (left <= 0L) break
-                delay(if (isPaused) 200L else minOf(left, 50L))
+                delay(minOf(left, 50L))   // ← removed isPaused branch (see below)
             }
             timeUp(seq)
         }

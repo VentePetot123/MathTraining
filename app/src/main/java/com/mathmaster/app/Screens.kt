@@ -275,14 +275,18 @@ fun MenuHeader(vm: TrainerViewModel, onOpenProgress: () -> Unit) {
             .padding(22.dp),
         verticalAlignment = Alignment.CenterVertically
     ) {
-        Column(Modifier.weight(1f), verticalArrangement = Arrangement.spacedBy(6.dp)) {
+        Column(
+            Modifier.weight(1f),
+            horizontalAlignment = Alignment.CenterHorizontally, // <-- Added for centering
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
             Txt("Progress Dashboard", 22, FontWeight.ExtraBold, Color.White)
             Txt("Tap to view your progress", 13, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
             // FIX #8 — Always show the actual numbers, even at zero. Previously we showed
             // "Your progress will appear here" until the user practiced, which hid the
             // fact that the counters existed. Now the row is visible from the first launch.
             TextWithFlame(
-                "${t.answers} Answers · ${t.sessions} Sessions · Best Streak ${t.bestStreak}",
+                "Best Streak ${t.bestStreak}",
                 12, FontWeight.Medium, Color.White.copy(alpha = 0.85f),
                 flameSize = 14.dp
             )
@@ -1652,7 +1656,7 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
         // again would be redundant (Results already has those actions). The screen
         // becomes a pure progress view in that case.
         if (!vm.categoryDetailFromResults) {
-            GradientButton("Start Practice", Modifier.fillMaxWidth()) { vm.startSession() }
+            GradientButton("Start Practice", Modifier.fillMaxWidth()) { vm.openCategory(cat) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SoftButton("Menu", Modifier.weight(1f), size = 14) { vm.toMenu() }
                 SoftButton(
@@ -1775,19 +1779,20 @@ fun CategoryProgressSection(
             }
         }
 
+        val ranks = remember(details) { rankFacts(details) }
+
         if (details.isNotEmpty()) {
             Column(
                 Modifier.fillMaxWidth().padding(top = 4.dp),
                 verticalArrangement = Arrangement.spacedBy(2.dp)
             ) {
                 SectionTitle("All Time Best")
-                val (strongTxt, weakTxt) = remember(mastery, details) { summarize(mastery, details) }
                 Row(
                     Modifier.fillMaxWidth(),
                     horizontalArrangement = Arrangement.spacedBy(12.dp)
                 ) {
-                    HighlightBox("Best Strength", strongTxt, c.success, Modifier.weight(1f))
-                    HighlightBox("Worst Weakness", weakTxt, c.error, Modifier.weight(1f), broken = true)
+                    HighlightBox("Best Strength", ranks.strengths.firstOrNull()?.key ?: "No Data", c.success, Modifier.weight(1f))
+                    HighlightBox("Worst Weakness", ranks.weaknesses.firstOrNull()?.key ?: "No Data", c.error, Modifier.weight(1f), broken = true)
                 }
             }
         }
@@ -1799,37 +1804,41 @@ fun CategoryProgressSection(
             }
             TrendChart(history)
 
-            val sortedByCorrect = remember(details) {
-                details.filter { it.correct > it.incorrect }
-                    .sortedWith(
-                        compareByDescending<AdaptiveEngine.FactDetail> { it.correct - it.incorrect }
-                            .thenBy { it.avgMs }
-                    )
-            }
-            val sortedByWrong = remember(details) {
-                details.filter { it.incorrect > 0 && it.incorrect >= it.correct }
-                    .sortedWith(
-                        compareByDescending<AdaptiveEngine.FactDetail> { it.incorrect - it.correct }
-                            .thenByDescending { it.lastSeen }
-                    )
-            }
-
-            if (sortedByCorrect.isEmpty()) {
+            if (ranks.strengths.isEmpty()) {
                 SectionTitle("Strength List")
                 Txt("No Data", 14, FontWeight.Medium, c.muted, Modifier.fillMaxWidth().padding(vertical = 8.dp), TextAlign.Center)
             } else {
-                RankTable("Strength List", sortedByCorrect, strong = true)
+                RankTable("Strength List", ranks.strengths, strong = true)
             }
 
-            if (sortedByWrong.isEmpty()) {
+            if (ranks.weaknesses.isEmpty()) {
                 SectionTitle("Weakness List")
                 Txt("No Data", 14, FontWeight.Medium, c.muted, Modifier.fillMaxWidth().padding(vertical = 8.dp), TextAlign.Center)
             } else {
-                RankTable("Weakness List", sortedByWrong, strong = false)
+                RankTable("Weakness List", ranks.weaknesses, strong = false)
             }
         }
     }
 }
+
+private class FactRanks(
+    val strengths: List<AdaptiveEngine.FactDetail>,
+    val weaknesses: List<AdaptiveEngine.FactDetail>
+)
+
+private fun rankFacts(details: List<AdaptiveEngine.FactDetail>) = FactRanks(
+    strengths = details.filter { it.correct > 0 }.sortedWith(
+        compareByDescending<AdaptiveEngine.FactDetail> { it.correct - it.incorrect }
+            .thenByDescending { it.correct }
+            .thenBy { it.key }
+    ),
+    weaknesses = details.filter { it.incorrect > 0 }.sortedWith(
+        compareByDescending<AdaptiveEngine.FactDetail> { it.incorrect - it.correct }
+            .thenByDescending { it.incorrect }
+            .thenByDescending { it.lastSeen }
+    )
+)
+
 
 @Composable
 private fun MasteryBar(label: String, pct: Int, color: Color) {
@@ -1854,29 +1863,6 @@ private fun MasteryBar(label: String, pct: Int, color: Color) {
 
 // Small helpers used only inside the dashboard section.
 private fun Double.format1(): String = String.format(java.util.Locale.US, "%.1f", this)
-
-private fun summarize(
-    mastery: Triple<Int, Int, Int>,
-    details: List<AdaptiveEngine.FactDetail>
-): Pair<String, String> {
-    val netPositive = details.filter { it.correct > it.incorrect }
-    val netNegative = details.filter { it.incorrect > 0 && it.incorrect >= it.correct }
-
-    val best = netPositive.maxByOrNull { it.correct - it.incorrect }?.key
-    val worst = netNegative.maxByOrNull { it.incorrect - it.correct }?.key
-
-    val strong = when {
-        best != null -> best
-        details.any { it.correct > 0 } -> "None yet"
-        else -> "No Data"
-    }
-    val weak = when {
-        worst != null -> worst
-        details.any { it.incorrect > 0 } -> "None yet"
-        else -> "No Data"
-    }
-    return strong to weak
-}
 
 // FIX #8: perf — dashboard loading placeholder. A gradient progress bar that fills
 // from 0 → 90% over ~700ms and holds, then disappears when real data replaces it.

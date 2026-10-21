@@ -1234,6 +1234,7 @@ fun RankTable(
     val line = Color.White.copy(alpha = 0.14f)
     var visible by remember { mutableStateOf(3) }
     val shown = items.take(visible)
+    val expanded = visible > 3
 
     Column(
         Modifier.fillMaxWidth().padding(top = 6.dp),
@@ -1282,29 +1283,15 @@ fun RankTable(
                     ) {
                         Txt("$count", 15, FontWeight.ExtraBold, accent)
                         Txt(label, 10, FontWeight.Medium, c.muted)
-                        Txt("${d.correct}✓ · ${d.incorrect}✗", 9, FontWeight.Medium, c.muted)
                     }
                 }
             }
         }
 
         if (items.size > 3) {
-            Row(
-                Modifier.fillMaxWidth().padding(top = 6.dp),
-                horizontalArrangement = Arrangement.spacedBy(8.dp),
-                verticalAlignment = Alignment.CenterVertically
-            ) {
-                if (visible < items.size) {
-                    SoftButton(
-                        "Show more (${items.size - visible} left)",
-                        Modifier.weight(1f),
-                        size = 12
-                    ) {
-                        visible = if (visible == 3) 25 else (visible + 25).coerceAtMost(items.size)
-                    }
-                }
-                if (visible > 3) {
-                    SoftButton("Collapse", Modifier.weight(1f), size = 12) { visible = 3 }
+            Box(Modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+                ExpandChevron(expanded = visible > 3, enabled = true, color = accent) {
+                    visible = if (visible == 3) 25 else 3
                 }
             }
         }

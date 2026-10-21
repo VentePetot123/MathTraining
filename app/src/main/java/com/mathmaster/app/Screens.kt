@@ -856,9 +856,8 @@ fun QuestionCard(u: UiSession, liveTickMs: Long = 0L, onShown: () -> Unit = {}) 
     // visible and laid out — the timer starts from a clean t=0 from the
     // user's perspective.
     LaunchedEffect(u.seq) {
-        entrance.animateTo(1f, tween(380, easing = FastOutSlowInEasing))
-        kotlinx.coroutines.yield()      // let one more frame render
-        onShown()
+    entrance.animateTo(1f, tween(380, easing = FastOutSlowInEasing))
+    onShown()
     }
 
     // Animation: color pulse on feedback, shake on wrong answers

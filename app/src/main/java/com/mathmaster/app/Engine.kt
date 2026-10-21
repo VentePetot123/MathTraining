@@ -48,6 +48,7 @@ class SessionRuntime {
 /** SharedPreferences + JSON persistence. */
 class Store(context: Context) {
     private val prefs = context.getSharedPreferences("mathmaster", Context.MODE_PRIVATE)
+    val history = HistoryStore(context.filesDir)
 
     fun loadStats(cat: String): MutableMap<String, QStat> {
         val raw = prefs.getString("stats_$cat", null) ?: return HashMap()
@@ -96,6 +97,7 @@ class Store(context: Context) {
 
     fun clearCategory(cat: String) {
         prefs.edit().remove("stats_$cat").remove("win_$cat").remove("hist_$cat").apply()
+        history.clear(cat)
     }
 
     // FIX #8: perf — one-time migration of the old "powers" key. Powers of 2 and 3
@@ -136,28 +138,29 @@ class Store(context: Context) {
         }
     }
 
-        // FIX #8: perf — history is capped at the last 30 sessions to keep reads tiny.
-    fun loadHistory(cat: String): MutableList<SessionPoint> {
-        val raw = prefs.getString("hist_$cat", null) ?: return mutableListOf()
-        return try {
-            raw.split(';').mapNotNull { seg ->
-                val p = seg.split(',')
-                if (p.size < 2) null
-                else SessionPoint(
-                    p[0].toIntOrNull() ?: return@mapNotNull null,
-                    p[1].toIntOrNull() ?: return@mapNotNull null,
-                    p.getOrNull(2)?.toLongOrNull() ?: 0L
-                )
-            }.toMutableList()
-        } catch (e: Exception) {
-            prefs.edit().remove("hist_$cat").apply()
-            mutableListOf()
+    // One-time move of the old SharedPreferences history into the binary logs.
+    // Old data stays in prefs until its import has succeeded; a failure just retries next launch.
+    fun migrateHistoryToFiles() {
+        if (prefs.getBoolean("history_in_files", false)) return
+        val ed = prefs.edit()
+        var allOk = true
+        for (cat in Categories.all) {
+            val raw = prefs.getString("hist_${cat.id}", null) ?: continue
+            try {
+                val pts = raw.split(';').mapNotNull { seg ->
+                    val p = seg.split(',')
+                    val acc = p.getOrNull(0)?.toIntOrNull() ?: return@mapNotNull null
+                    val ms = p.getOrNull(1)?.toIntOrNull() ?: return@mapNotNull null
+                    SessionPoint(acc, ms, p.getOrNull(2)?.toLongOrNull() ?: 0L)
+                }
+                history.importLegacy(cat.id, pts)
+                ed.remove("hist_${cat.id}")
+            } catch (e: Exception) {
+                allOk = false
+            }
         }
-    }
-
-    fun saveHistory(cat: String, h: List<SessionPoint>) {
-        val s = h.takeLast(100).joinToString(";") { "${it.accuracyPct},${it.avgMs},${it.at}" }
-        prefs.edit().putString("hist_$cat", s).apply()
+        if (allOk) ed.putBoolean("history_in_files", true)
+        ed.apply()
     }
 
     fun loadSettings(cat: String): Triple<Int, Int, Int>? {
@@ -319,7 +322,6 @@ class AdaptiveEngine(private val store: Store) {
     private val stats = HashMap<String, MutableMap<String, QStat>>()
     private val windows = HashMap<String, MutableList<Boolean>>()
     private val dirty = HashSet<String>()
-    private val histories = HashMap<String, MutableList<SessionPoint>>()   // FIX #8: perf
 
     // FIX #8 — cache the `details()` projection per category. `details()` maps
     // every QStat into a FactDetail on every call, which is O(n) in the number of
@@ -398,7 +400,6 @@ class AdaptiveEngine(private val store: Store) {
     fun reset(cat: String) {
         stats[cat] = HashMap()
         windows[cat] = mutableListOf()
-        histories[cat] = mutableListOf()
         dirty.remove(cat)
         store.clearCategory(cat)
         // FIX #8 — invalidate the details cache so the next details() call rebuilds
@@ -435,25 +436,27 @@ class AdaptiveEngine(private val store: Store) {
                 if (s.streak > bestStreak) bestStreak = s.streak
             }
             // 2. Sum up the completed sessions for this category
-            totalSessions += history(cat.id).size
+            totalSessions += store.history.count(cat.id)
         }
 
         // Update the global cache with the exact numbers derived from the saved data.
         store.setTotals(totalCorrect + totalIncorrect, totalSessions, bestStreak)
     }
-    // FIX #8: perf — snapshot per-session aggregate for the dashboard trend chart.
-    @Synchronized
+
+    // Deliberately NOT @Synchronized: HistoryStore has its own lock, and the engine lock
+    // must never be held across a disk sync (the UI thread takes it too).
     fun recordSession(cat: String, score: Int, total: Int, avgMs: Int) {
         if (total <= 0) return
-        val h = histories.getOrPut(cat) { store.loadHistory(cat) }
-        h.add(SessionPoint(score * 100 / total, avgMs, System.currentTimeMillis()))
-        while (h.size > 100) h.removeAt(0)
-        dirty.add(cat)
+        store.history.append(
+            cat, listOf(SessionPoint(score * 100 / total, avgMs, System.currentTimeMillis()))
+        )
     }
 
-    @Synchronized
-    fun history(cat: String): List<SessionPoint> =
-        histories.getOrPut(cat) { store.loadHistory(cat) }.toList()
+    fun historyRef(cat: String): HistoryRef {
+        val total = store.history.count(cat)
+        val tail = if (total >= 2) store.history.read(cat, total - minOf(total, 128), total) else emptyList()
+        return HistoryRef(cat, total, tail) { a, b -> store.history.read(cat, a, b) }
+    }
 
     /** Pool = already-practiced questions in range; unseen ones wait to be introduced. */
     @Synchronized
@@ -601,7 +604,6 @@ class AdaptiveEngine(private val store: Store) {
         for (cat in dirty.toList()) {
             store.saveStats(cat, stats(cat))
             store.saveWindow(cat, window(cat))
-            store.saveHistory(cat, histories.getOrPut(cat) { store.loadHistory(cat) })   // FIX #8
         }
         dirty.clear()
         store.flushTotals()   // FIX #8: batch-persist global counters

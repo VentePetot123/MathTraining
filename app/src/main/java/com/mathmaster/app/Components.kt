@@ -94,13 +94,32 @@ import androidx.compose.animation.core.infiniteRepeatable
 import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.ui.graphics.TransformOrigin
+import android.graphics.Paint
+import android.graphics.Rect
+import android.graphics.Typeface
+import android.os.Build
 import androidx.compose.ui.unit.Constraints
 import kotlin.math.roundToInt
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import kotlin.math.abs
 import kotlin.math.cos
-import kotlin.random.Random
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.rememberScrollableState
+import androidx.compose.foundation.gestures.scrollable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.withContext
+import kotlin.math.ceil
+import kotlin.math.floor
 
 @Composable
 fun GradientText(
@@ -437,12 +456,16 @@ fun Stepper(
     }
 }
 
+private const val CHART_WINDOW = 100     // sessions visible at once
+private const val PREFETCH = 400         // sessions buffered each side of the view
+private const val REFILL_MARGIN = 150    // refill before the edge: a full-speed fling is ~1 point/ms, a refill ~3 ms
+
+private class Buf(val from: Int, val pts: List<SessionPoint>)
+
 @Composable
-fun TrendChart(
-    history: List<SessionPoint>,
-    modifier: Modifier = Modifier
-) {
-    if (history.size < 2) {
+fun TrendChart(history: HistoryRef, modifier: Modifier = Modifier) {
+    val total = history.total
+    if (total < 2) {
         val c = AppTheme.colors
         Box(
             modifier.fillMaxWidth().height(96.dp)
@@ -457,57 +480,175 @@ fun TrendChart(
         return
     }
 
-    val n = history.size
-    val accuracy = remember(history) { history.map { it.accuracyPct.toFloat().coerceIn(0f, 100f) } }
-    val seconds = remember(history) { history.map { it.avgMs / 1000f } }
-    val step = remember(seconds) {
-        val maxVal = seconds.maxOrNull() ?: 1f
-        if (maxVal <= 4f) 1 
-        else kotlin.math.ceil(maxVal / 4.0).toInt().coerceAtLeast(2)
+    val visible = minOf(total, CHART_WINDOW)
+    val maxPos = (total - visible).toDouble()
+
+    // pos = session index at the left edge of the plot. Opens on the newest sessions,
+    // survives rotation, and resets to the newest when a session is added.
+    var pos by rememberSaveable(history) { mutableStateOf(maxPos) }
+    var buf by remember(history) { mutableStateOf(Buf(history.tailFrom, history.tail)) }
+    val first by remember(history) { derivedStateOf { floor(pos).toInt() } }
+
+    // Keep a buffer of points around the viewport; refill off the main thread before an edge.
+    LaunchedEffect(history) {
+        snapshotFlow { first }.collectLatest { f ->
+            val lo = maxOf(f - 1, 0)
+            val hi = minOf(f + visible + 1, total)
+            val cur = buf
+            val end = cur.from + cur.pts.size
+            val needLeft = lo - REFILL_MARGIN < cur.from && cur.from > 0
+            val needRight = hi + REFILL_MARGIN > end && end < total
+            if (needLeft || needRight) {
+                val from = maxOf(f - PREFETCH, 0)
+                val to = minOf(f + visible + PREFETCH, total)
+                val pts = withContext(Dispatchers.IO) {
+                    runCatching { history.read(from, to) }.getOrDefault(emptyList())
+                }
+                if (pts.isNotEmpty()) buf = Buf(from, pts)    // on a read error keep the old buffer, retry on next swipe
+            }
+        }
     }
 
-    Column(modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
-        ChartPanel(
-            title = "ACCURACY",
-            values = accuracy,
-            yMax = 100f,
-            color = AppTheme.colors.success, // <-- Theme-aware green
-            ticks = listOf("100%", "75%", "50%", "25%", "0%"),
-            topRightText = null,
-            bottomText = "Sessions: $n"
-        )
-        
-        val maxSec = seconds.maxOrNull() ?: 0f
-        val minSec = seconds.minOrNull() ?: 0f
-        ChartPanel(
-            title = "TIME/ANSWER",
-            values = seconds,
-            yMax = (step * 4).toFloat(),
-            color = AppTheme.colors.accentA, // <-- Theme-aware purple
-            ticks = listOf("${step * 4}s", "${step * 3}s", "${step * 2}s", "${step}s", "0s"),
-            topRightText = null,
-            bottomText = null,
-            fastest = String.format(java.util.Locale.US, "%.1f", minSec),
-            slowest = String.format(java.util.Locale.US, "%.1f", maxSec)
-        )
+    val b = buf
+    val acc = remember(b) { FloatArray(b.pts.size) { b.pts[it].accuracyPct.toFloat().coerceIn(0f, 100f) } }
+    val sec = remember(b) { FloatArray(b.pts.size) { b.pts[it].avgMs / 1000f } }
+
+    // Min/max of the sessions on screen: drives the time axis and Fastest/Slowest.
+    val stats by remember(b) {
+        derivedStateOf {
+            val f = floor(pos).toInt()
+            val a = maxOf(f, b.from) - b.from
+            val z = minOf(f + visible + 1, b.from + sec.size) - b.from
+            var mn = Float.MAX_VALUE
+            var mx = 0f
+            for (i in a until z) {
+                if (sec[i] < mn) mn = sec[i]
+                if (sec[i] > mx) mx = sec[i]
+            }
+            if (z > a) mn to mx else 0f to 0f
+        }
+    }
+    val maxSec = stats.second
+    val yStep = if (maxSec <= 4f) 1 else ceil(maxSec / 4.0).toInt().coerceAtLeast(2)
+
+    BoxWithConstraints(modifier.fillMaxWidth()) {
+        // Plot width = card width - panel padding (12+12) - tick column (38)
+        val plotPx = with(LocalDensity.current) { (maxWidth - 62.dp).toPx() }
+        val stepPx = plotPx / (visible - 1)
+
+        val scrollState = rememberScrollableState { dx ->
+            val before = pos
+            val next = (before - dx / stepPx).coerceIn(0.0, maxPos)
+            pos = next
+            ((before - next) * stepPx).toFloat()     // pixels actually consumed (ends the fling at the edges)
+        }
+
+        Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(16.dp)) {
+            if (total > CHART_WINDOW) {
+                Column(Modifier.fillMaxWidth(), verticalArrangement = Arrangement.spacedBy(4.dp)) {
+                    RangeCaption({ pos }, visible, total)
+                    HistoryScrubber({ pos }, { pos = it.coerceIn(0.0, maxPos) }, visible, total)
+                }
+            }
+
+            Column(
+                Modifier.fillMaxWidth().scrollable(scrollState, Orientation.Horizontal),
+                verticalArrangement = Arrangement.spacedBy(16.dp)
+            ) {
+                ChartPanel(
+                    title = "ACCURACY",
+                    from = b.from, values = acc, pos = { pos }, visible = visible, total = total,
+                    yMax = 100f,
+                    color = AppTheme.colors.success,
+                    ticks = listOf("100%", "75%", "50%", "25%", "0%"),
+                    bottomText = "Sessions: $total"
+                )
+                ChartPanel(
+                    title = "TIME/ANSWER",
+                    from = b.from, values = sec, pos = { pos }, visible = visible, total = total,
+                    yMax = (yStep * 4).toFloat(),
+                    color = AppTheme.colors.accentA,
+                    ticks = listOf("${yStep * 4}s", "${yStep * 3}s", "${yStep * 2}s", "${yStep}s", "0s"),
+                    bottomText = null,
+                    fastest = String.format(java.util.Locale.US, "%.1f", stats.first),
+                    slowest = String.format(java.util.Locale.US, "%.1f", stats.second)
+                )
+            }
+        }
+    }
+}
+
+// Own composable so only this one line recomposes while swiping.
+@Composable
+private fun RangeCaption(pos: () -> Double, visible: Int, total: Int) {
+    val first = floor(pos()).toInt()
+    Txt(
+        "Sessions ${first + 1}–${first + visible} of $total  ·  swipe or drag the bar",
+        11, FontWeight.Medium, AppTheme.colors.muted, Modifier.fillMaxWidth(), TextAlign.Center
+    )
+}
+
+private fun scrubPos(x: Float, width: Float, thumbW: Float, maxPos: Double): Double =
+    ((x - thumbW / 2f) / (width - thumbW)).coerceIn(0f, 1f) * maxPos
+
+// Scrollbar over the whole history: tap or drag to jump anywhere (fling alone is too slow at 10,000+ sessions).
+@Composable
+private fun HistoryScrubber(
+    pos: () -> Double,
+    onSeek: (Double) -> Unit,
+    visible: Int,
+    total: Int
+) {
+    val c = AppTheme.colors
+    val maxPos = (total - visible).toDouble()
+    val seek = rememberUpdatedState(onSeek)
+
+    Canvas(
+        Modifier
+            .fillMaxWidth()
+            .height(32.dp)
+            .pointerInput(total, visible) {
+                val tw = maxOf(size.width * visible.toFloat() / total, 24.dp.toPx())
+                detectTapGestures { seek.value(scrubPos(it.x, size.width.toFloat(), tw, maxPos)) }
+            }
+            .pointerInput(total, visible) {
+                val tw = maxOf(size.width * visible.toFloat() / total, 24.dp.toPx())
+                detectDragGestures(
+                    onDragStart = { seek.value(scrubPos(it.x, size.width.toFloat(), tw, maxPos)) },
+                    onDrag = { change, _ ->
+                        change.consume()
+                        seek.value(scrubPos(change.position.x, size.width.toFloat(), tw, maxPos))
+                    }
+                )
+            }
+    ) {
+        val th = 6.dp.toPx()
+        val top = (size.height - th) / 2f
+        val r = CornerRadius(th / 2f, th / 2f)
+        drawRoundRect(c.surfaceAlt, Offset(0f, top), Size(size.width, th), r)
+        val tw = maxOf(size.width * visible.toFloat() / total, 24.dp.toPx())
+        val left = ((pos() / maxPos).coerceIn(0.0, 1.0) * (size.width - tw)).toFloat()
+        drawRoundRect(c.accentA, Offset(left, top), Size(tw, th), r)
     }
 }
 
 @Composable
 private fun ChartPanel(
     title: String,
-    values: List<Float>,
+    from: Int,                 // session index of values[0]
+    values: FloatArray,        // buffered points: sessions [from, from + size)
+    pos: () -> Double,         // index at the left edge (read only while drawing)
+    visible: Int,              // points across the plot
+    total: Int,
     yMax: Float,
     color: Color,
-    ticks: List<String>,          
-    topRightText: String?,
+    ticks: List<String>,
     bottomText: String?,
     fastest: String? = null,
     slowest: String? = null
 ) {
     val c = AppTheme.colors
     val muted = c.muted
-    // Stronger gridlines in light mode, subtle in dark mode
     val grid = c.onBackground.copy(alpha = if (c.isDark) 0.08f else 0.20f)
 
     Column(
@@ -515,12 +656,11 @@ private fun ChartPanel(
             .fillMaxWidth()
             .clip(RoundedCornerShape(14.dp))
             .background(c.background)
-            .border(2.dp, color.copy(alpha = 0.6f), RoundedCornerShape(14.dp)) // <-- Added border back
+            .border(2.dp, color.copy(alpha = 0.6f), RoundedCornerShape(14.dp))
             .padding(12.dp),
         verticalArrangement = Arrangement.spacedBy(12.dp),
         horizontalAlignment = Alignment.CenterHorizontally
     ) {
-        // Centered Title
         Text(
             text = title,
             color = color,
@@ -531,36 +671,18 @@ private fun ChartPanel(
             modifier = Modifier.fillMaxWidth()
         )
 
-        if (topRightText != null) {
-            Text(
-                text = topRightText,
-                color = c.onBackground,
-                fontSize = 11.sp,
-                fontWeight = FontWeight.Medium,
-                textAlign = TextAlign.Center,
-                modifier = Modifier.fillMaxWidth()
-            )
-        }
-
         Row(Modifier.fillMaxWidth().height(110.dp)) {
-            // FIX #8 — pad top/bottom of the ticks column so the "100%" / "0%" labels
-            // (and "Xs" / "0s" on the time chart) don't graze the rounded corners of
-            // the panel. The 6dp matches the inset (7dp) used in the Canvas draw, so
-            // the labels align visually with the grid lines they reference.
             Column(
                 Modifier.width(38.dp).fillMaxHeight().padding(vertical = 6.dp),
                 verticalArrangement = Arrangement.SpaceBetween
             ) {
-                // Use onBackground instead of muted so the axis labels are clearly visible in Light Mode
                 ticks.forEach { Txt(it, 10, FontWeight.Medium, c.onBackground) }
             }
 
-            Canvas(Modifier.weight(1f).fillMaxHeight()) {
+            Canvas(Modifier.weight(1f).fillMaxHeight().clipToBounds()) {
                 val w = size.width
                 val inset = 7.dp.toPx()
                 val plotH = size.height - inset * 2
-                val n = values.size
-                fun x(i: Int) = if (n > 1) w * i / (n - 1) else 0f
                 fun y(v: Float) = inset + plotH - plotH * (v.coerceIn(0f, yMax) / yMax)
 
                 for (f in floatArrayOf(0f, 0.25f, 0.5f, 0.75f, 1f)) {
@@ -568,17 +690,28 @@ private fun ChartPanel(
                     drawLine(grid, Offset(0f, gy), Offset(w, gy), 1f)
                 }
 
+                val step = w / (visible - 1)
+                val p = pos()
+                fun x(i: Int) = ((i - p) * step).toFloat()
+                fun at(i: Int) = values[i - from]
+
+                // Draw only the points on screen (+1 each side), never the whole history.
+                val base = floor(p).toInt()
+                val i0 = maxOf(base - 1, from)
+                val i1 = minOf(base + visible + 1, from + values.size - 1)
+                if (i1 <= i0) return@Canvas
+
                 val line = Path()
-                line.moveTo(x(0), y(values[0]))
-                for (i in 0 until n - 1) {
+                line.moveTo(x(i0), y(at(i0)))
+                for (i in i0 until i1) {
                     val cx = (x(i) + x(i + 1)) / 2f
-                    line.cubicTo(cx, y(values[i]), cx, y(values[i + 1]), x(i + 1), y(values[i + 1]))
+                    line.cubicTo(cx, y(at(i)), cx, y(at(i + 1)), x(i + 1), y(at(i + 1)))
                 }
 
                 val fill = Path().apply {
                     addPath(line)
-                    lineTo(x(n - 1), y(0f))
-                    lineTo(x(0), y(0f))
+                    lineTo(x(i1), y(0f))
+                    lineTo(x(i0), y(0f))
                     close()
                 }
                 drawPath(
@@ -589,46 +722,34 @@ private fun ChartPanel(
                     )
                 )
                 drawPath(line, color, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
-                drawCircle(color, 3.5.dp.toPx(), Offset(x(n - 1), y(values[n - 1])))
+                if (i1 == total - 1) drawCircle(color, 3.5.dp.toPx(), Offset(x(i1), y(at(i1))))
             }
         }
 
         if (bottomText != null) {
             Text(
                 text = bottomText,
-                color = color, // <-- Uses the theme-aware color passed into ChartPanel
+                color = color,
                 fontSize = 11.sp,
                 fontWeight = FontWeight.SemiBold,
                 textAlign = TextAlign.Center,
                 modifier = Modifier.fillMaxWidth()
             )
         } else if (fastest != null && slowest != null) {
-            // FIX: Grouped and horizontally centered at the bottom
             Row(
                 Modifier.fillMaxWidth().padding(top = 6.dp),
-                horizontalArrangement = Arrangement.Center, // Centers the whole group
+                horizontalArrangement = Arrangement.Center,
                 verticalAlignment = Alignment.CenterVertically
             ) {
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Txt("Fastest: ", 11, FontWeight.Medium, muted)
                     Txt("${fastest}s", 11, FontWeight.Bold, c.success)
                 }
-                
-                // Spacer to separate the two stats
-                Spacer(Modifier.width(24.dp)) 
-                
+                Spacer(Modifier.width(24.dp))
                 Row(verticalAlignment = Alignment.CenterVertically) {
                     Txt("Slowest: ", 11, FontWeight.Medium, muted)
                     Txt("${slowest}s", 11, FontWeight.Bold, c.error)
                 }
-            }
-        } else {
-            Row(
-                Modifier.fillMaxWidth().padding(start = 38.dp),
-                horizontalArrangement = Arrangement.SpaceBetween
-            ) {
-                Txt("Oldest", 10, FontWeight.Normal, muted)
-                Txt("Latest", 10, FontWeight.Normal, muted)
             }
         }
     }
@@ -841,7 +962,7 @@ fun StreakCounter(
     slide: Float,
     flame: Float,
     modifier: Modifier = Modifier,
-    gap: Dp = 6.dp
+    gap: Dp = 10.dp
 ) {
     val flicker = rememberInfiniteTransition(label = "flicker")
     val flick by flicker.animateFloat(
@@ -873,6 +994,23 @@ fun StreakCounter(
         val t = measurables[0].measure(Constraints())
         val fl = measurables[1].measure(Constraints())
 
+        // Real ink bounds of the digits (excludes the side bearings of the text box).
+        val paint = Paint().apply {
+            isAntiAlias = true
+            textSize = countSize.sp.toPx()
+            typeface = if (Build.VERSION.SDK_INT >= 28)
+                Typeface.create(Typeface.DEFAULT, 800, false)
+            else Typeface.DEFAULT_BOLD
+        }
+        val b = Rect()
+        paint.getTextBounds(text, 0, text.length, b)
+        val inkLeft = b.left.toFloat()
+        val inkW = (b.right - b.left).toFloat()
+
+        // Visible part of the flame inside its box (the path spans ~0.135..0.865 of the width).
+        val flameInkL = fl.width * 0.135f
+        val flameInkW = fl.width * (0.865f - 0.135f)
+
         val baseline = t[LastBaseline]
         val cap = countSize.sp.toPx() * 0.72f
         val textTop = baseline - cap
@@ -880,17 +1018,23 @@ fun StreakCounter(
         val minY = minOf(textTop, flameTop)
         val maxY = maxOf(baseline.toFloat(), flameTop + fl.height)
 
-        val w = constraints.maxWidth
-        val centeredX = (w - t.width) / 2f
-        val finalX = (w - (t.width + gapPx + fl.width)) / 2f
-        val x = centeredX + (finalX - centeredX) * slide.coerceIn(0f, 1f)
+        val w = constraints.maxWidth.toFloat()
 
-        layout(w, (maxY - minY).roundToInt()) {
-            t.placeRelative(x.roundToInt(), (-minY).roundToInt())
-            fl.placeRelative(
-                (finalX + t.width + gapPx).roundToInt(),
-                (flameTop - minY).roundToInt()
-            )
+        // Start: digits centered by their ink.
+        val startTextX = (w - inkW) / 2f - inkLeft
+
+        // End: digits + flame centered as one visible group, edge to edge.
+        val groupW = inkW + gapPx + flameInkW
+        val groupLeft = (w - groupW) / 2f
+        val endTextX = groupLeft - inkLeft
+        val endFlameX = groupLeft + inkW + gapPx - flameInkL
+
+        val s = slide.coerceIn(0f, 1f)
+        val textX = startTextX + (endTextX - startTextX) * s
+
+        layout(constraints.maxWidth, (maxY - minY).roundToInt()) {
+            t.placeRelative(textX.roundToInt(), (-minY).roundToInt())
+            fl.placeRelative(endFlameX.roundToInt(), (flameTop - minY).roundToInt())
         }
     }
 }

@@ -132,7 +132,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         // FIX #8: perf — dashboard data loaded off the main thread and cached here.
     data class DashboardData(
         val mastery: Map<String, Triple<Int, Int, Int>>,
-        val history: Map<String, List<SessionPoint>>,
+        val history: Map<String, HistoryRef>,
         val details: Map<String, List<AdaptiveEngine.FactDetail>>
     )
     var dashboard by mutableStateOf<DashboardData?>(null)
@@ -170,7 +170,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val data = withContext(Dispatchers.IO) {
                 val mastery = Categories.all.associate { it.id to engine.mastery(it.id) }
-                val history = Categories.all.associate { it.id to engine.history(it.id) }
+                val history = Categories.all.associate { it.id to engine.historyRef(it.id) }
                 val details = Categories.all.associate { it.id to engine.details(it.id) }
                 DashboardData(mastery, history, details)
             }
@@ -209,6 +209,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         // FIX #8: perf — one-time migration for the powers split. Runs on IO before
         // the first menu read so the migrated data is already in place.
         store.migratePowersSplit()
+                runCatching { store.migrateHistoryToFiles() }   // can never block startup
 
         // FIX #8: perf — warm-up pass. Every heavy operation the app does on its
         // first real interaction is exercised here so JIT has compiled it before the
@@ -222,7 +223,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
             //    spend 30-50ms mapping Categories.all into DashboardData on the slide.
             dashboard = DashboardData(
                 Categories.all.associate { it.id to engine.mastery(it.id) },
-                Categories.all.associate { it.id to engine.history(it.id) },
+                Categories.all.associate { it.id to engine.historyRef(it.id) },
                 Categories.all.associate { it.id to engine.details(it.id) }
             )
 
@@ -258,7 +259,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun buildDashboard() = DashboardData(
         Categories.all.associate { it.id to engine.mastery(it.id) },
-        Categories.all.associate { it.id to engine.history(it.id) },
+        Categories.all.associate { it.id to engine.historyRef(it.id) },
         Categories.all.associate { it.id to engine.details(it.id) }
     )
 
@@ -471,7 +472,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
             val data = withContext(Dispatchers.IO) {
                 DashboardData(
                     Categories.all.associate { it.id to engine.mastery(it.id) },
-                    Categories.all.associate { it.id to engine.history(it.id) },
+                    Categories.all.associate { it.id to engine.historyRef(it.id) },
                     Categories.all.associate { it.id to engine.details(it.id) }
                 )
             }

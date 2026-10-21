@@ -80,7 +80,22 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
+import androidx.compose.foundation.gestures.Orientation
+import androidx.compose.foundation.gestures.detectDragGestures
+import androidx.compose.foundation.gestures.detectTapGestures
+import androidx.compose.foundation.gestures.rememberScrollableState
+import androidx.compose.foundation.gestures.scrollable
+import androidx.compose.runtime.derivedStateOf
+import androidx.compose.runtime.saveable.rememberSaveable
+import androidx.compose.runtime.snapshotFlow
+import androidx.compose.ui.draw.clipToBounds
+import androidx.compose.ui.input.pointer.pointerInput
+import androidx.compose.ui.platform.LocalDensity
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.flow.collectLatest
+import kotlinx.coroutines.withContext
+import kotlin.math.ceil
+import kotlin.math.floor
 import java.util.Locale
 import kotlinx.coroutines.async
 import kotlinx.coroutines.coroutineScope
@@ -149,7 +164,7 @@ fun LoadingScreen(vm: TrainerViewModel) {
             CategoryProgressSection(
                 cat = Categories.all.first(),
                 mastery = Triple(0, 0, 0),
-                history = emptyList(),
+                history = HistoryRef.EMPTY,
                 details = emptyList(),
                 onOpen = null,
                 showHeader = false
@@ -1284,7 +1299,7 @@ fun ResultsScreen(vm: TrainerViewModel) {
                 suffix = "s" // Add an 's' to show seconds
             )
 
-            // Streak: label + number/flame, both centered, trimmed to visible bounds
+            // Streak: number/flame on top, label below
             Column(
                 Modifier
                     .fillMaxWidth()
@@ -1292,11 +1307,6 @@ fun ResultsScreen(vm: TrainerViewModel) {
                 horizontalAlignment = Alignment.CenterHorizontally,
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
-                Text(
-                    "STREAK", color = c.muted, fontSize = 12.sp,
-                    fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp,
-                    lineHeight = 12.sp
-                )
                 StreakCounter(
                     text = "${(countP.value * r.best).roundToInt()}",
                     countSize = 48,
@@ -1305,6 +1315,11 @@ fun ResultsScreen(vm: TrainerViewModel) {
                     slide = slideP.value,
                     flame = flameP.value,
                     modifier = Modifier.fillMaxWidth()
+                )
+                Text(
+                    "STREAK", color = c.muted, fontSize = 12.sp,
+                    fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp,
+                    lineHeight = 12.sp
                 )
             }
 
@@ -1514,7 +1529,7 @@ fun ProgressScreen(vm: TrainerViewModel) {
                     CategoryProgressSection(
                         cat = cat,
                         mastery = dash.mastery[cat.id] ?: Triple(0, 0, 0),
-                        history = dash.history[cat.id] ?: emptyList(),
+                        history = dash.history[cat.id] ?: HistoryRef.EMPTY,
                         details = dash.details[cat.id] ?: emptyList(),
                         onOpen = { vm.openCategoryDetail(cat) },
                         // FIX #8 — dashboard cards are compact: no charts, no detailed
@@ -1620,7 +1635,7 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
             CategoryProgressSection(
                 cat = cat,
                 mastery = dash.mastery[cat.id] ?: Triple(0, 0, 0),
-                history = dash.history[cat.id] ?: emptyList(),
+                history = dash.history[cat.id] ?: HistoryRef.EMPTY,
                 details = dash.details[cat.id] ?: emptyList(),
                 onOpen = null,
                 showHeader = false
@@ -1707,7 +1722,7 @@ fun ProgressHeader(title: String, subtitle: String, onBack: () -> Unit) {
 fun CategoryProgressSection(
     cat: Category,
     mastery: Triple<Int, Int, Int>,        // (mastered%, learning%, struggling%)
-    history: List<SessionPoint>,
+    history: HistoryRef,
     details: List<AdaptiveEngine.FactDetail>,
     onOpen: (() -> Unit)?,
     // FIX #8: perf — when the caller already shows the category name in a hero above

@@ -850,8 +850,14 @@ fun QuestionCard(u: UiSession, liveTickMs: Long = 0L, onShown: () -> Unit = {}) 
     // Animation: question card entrance (fade + slight upward slide)
     // FIX #8 — after the entrance animation completes, notify the caller so the
     // timer starts counting from this moment, not from when the question was picked.
+    // Phase 1: play the entrance animation. Phase 2: after it settles,
+    // wait one more frame so the layout is stable, THEN notify the VM.
+    // This guarantees onShown() fires exactly once, after the card is fully
+    // visible and laid out — the timer starts from a clean t=0 from the
+    // user's perspective.
     LaunchedEffect(u.seq) {
         entrance.animateTo(1f, tween(380, easing = FastOutSlowInEasing))
+        kotlinx.coroutines.yield()      // let one more frame render
         onShown()
     }
 

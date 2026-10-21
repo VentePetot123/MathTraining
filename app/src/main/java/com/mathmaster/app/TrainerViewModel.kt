@@ -66,7 +66,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         // Grace period after the entrance animation ends, before the timer
         // starts counting. 1200ms covers typical "read the question" time
         // for arithmetic and factorial questions. Increase if still too tight.
-        private const val SETTLE_MS = 1200L
+        private const val SETTLE_MS = 150L
     }
 
     private val store = Store(app)
@@ -664,7 +664,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
                 liveTickMs = elapsed
                 val left = QUESTION_LIMIT_MS - elapsed
                 if (left <= 0L) break
-                delay(minOf(left, 50L))   // ← removed isPaused branch (see below)
+                delay(minOf(left, 33L))
             }
             timeUp(seq)
         }

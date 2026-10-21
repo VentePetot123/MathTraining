@@ -290,15 +290,24 @@ fun MenuHeader(vm: TrainerViewModel, onOpenProgress: () -> Unit) {
             ProgressGlyph()
         }
 
-        // Bottom Row: Streak centered across the full width
-        Box(
+        // Bottom Row: Streak perfectly centered across the full width
+        Column(
             Modifier.fillMaxWidth(),
-            contentAlignment = Alignment.Center
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
         ) {
-            TextWithFlame(
-                "Best Streak ${t.bestStreak}",
+            Row(
+                verticalAlignment = Alignment.CenterVertically,
+                horizontalArrangement = Arrangement.Center
+            ) {
+                Txt("${t.bestStreak}", 32, FontWeight.ExtraBold, Color.White)
+                Spacer(Modifier.width(6.dp))
+                FlameIcon(28.dp)
+            }
+            Txt(
+                "Best Overall Streak",
                 12, FontWeight.Medium, Color.White.copy(alpha = 0.85f),
-                flameSize = 14.dp
+                align = TextAlign.Center
             )
         }
     }

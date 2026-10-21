@@ -1,5 +1,6 @@
 package com.mathmaster.app
 
+import kotlin.random.Random
 import androidx.compose.animation.animateColorAsState
 import androidx.compose.animation.core.Animatable
 import androidx.compose.animation.core.FastOutSlowInEasing
@@ -95,7 +96,6 @@ import androidx.compose.animation.core.rememberInfiniteTransition
 import androidx.compose.animation.core.animateFloat
 import androidx.compose.ui.graphics.TransformOrigin
 import android.graphics.Paint
-import android.graphics.Rect
 import android.graphics.Typeface
 import android.os.Build
 import androidx.compose.ui.unit.Constraints
@@ -1002,7 +1002,7 @@ fun StreakCounter(
                 Typeface.create(Typeface.DEFAULT, 800, false)
             else Typeface.DEFAULT_BOLD
         }
-        val b = Rect()
+        val b = android.graphics.Rect()
         paint.getTextBounds(text, 0, text.length, b)
         val inkLeft = b.left.toFloat()
         val inkW = (b.right - b.left).toFloat()

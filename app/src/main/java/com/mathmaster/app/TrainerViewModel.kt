@@ -63,6 +63,10 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         // transition (240ms) plus settle time, so it only fires as a failsafe.
         private const val NAV_TIMEOUT_MS = 1500L
         private const val QUESTION_LIMIT_MS = 120_000L
+        // Grace period after the entrance animation ends, before the timer
+        // starts counting. 1200ms covers typical "read the question" time
+        // for arithmetic and factorial questions. Increase if still too tight.
+        private const val SETTLE_MS = 1200L
     }
 
     private val store = Store(app)
@@ -196,7 +200,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
 
     private fun currentElapsedMs(): Long =
         if (segmentStart == 0L) accumulatedMs
-        else accumulatedMs + (SystemClock.elapsedRealtime() - segmentStart)
+        else (accumulatedMs + (SystemClock.elapsedRealtime() - segmentStart)).coerceAtLeast(0L)
 
     private fun stopTimer() {
         timerActive = false
@@ -620,7 +624,13 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         if (!isPaused) return
         isPaused = false
         if (timerActive && segmentStart == 0L) {
-            segmentStart = SystemClock.elapsedRealtime()
+            // If the pause happened during the grace window, we lost track of
+            // the original startAt. Recompute it from the original questionStartedAt
+            // so the user still gets the remaining grace. If we're already past
+            // the grace window, this sets segmentStart to "now" as before.
+            val now = SystemClock.elapsedRealtime()
+            val originalStart = questionStartedAt
+            segmentStart = if (now < originalStart) originalStart else now
         }
     }
 
@@ -629,10 +639,15 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         if (rt.startedAt != 0L) return
         val seq = ui?.seq ?: return
         val now = SystemClock.elapsedRealtime()
-        rt.startedAt = now              // still used as the "already started" guard
-        questionStartedAt = now
+        // Grace period: the entrance animation just ended, but we give the user
+        // SETTLE_MS to actually read the question before we start counting.
+        // segmentStart is set in the FUTURE, so currentElapsedMs() returns 0
+        // until that moment — no need for a separate "not started yet" state.
+        val startAt = now + SETTLE_MS
+        rt.startedAt = startAt          // still used as the "already started" guard
+        questionStartedAt = startAt
         accumulatedMs = 0L
-        segmentStart = if (isPaused) 0L else now
+        segmentStart = if (isPaused) 0L else startAt
         timerActive = true
         timeoutJob?.cancel()
         timeoutJob = viewModelScope.launch {

@@ -851,9 +851,8 @@ fun QuestionCard(u: UiSession, liveTickMs: Long = 0L, onShown: () -> Unit = {}) 
     // FIX #8 — after the entrance animation completes, notify the caller so the
     // timer starts counting from this moment, not from when the question was picked.
     LaunchedEffect(u.seq) {
-        // Trigger the header update the moment the new card begins its entrance
-        onShown() 
         entrance.animateTo(1f, tween(380, easing = FastOutSlowInEasing))
+        onShown()
     }
 
     // Animation: color pulse on feedback, shake on wrong answers

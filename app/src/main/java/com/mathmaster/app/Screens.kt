@@ -277,18 +277,15 @@ fun MenuHeader(vm: TrainerViewModel, onOpenProgress: () -> Unit) {
     ) {
         Column(
             Modifier.weight(1f),
-            horizontalAlignment = Alignment.CenterHorizontally, // <-- Added for centering
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             Txt("Progress Dashboard", 22, FontWeight.ExtraBold, Color.White)
-            Txt("Tap to view your progress", 13, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
-            // FIX #8 — Always show the actual numbers, even at zero. Previously we showed
-            // "Your progress will appear here" until the user practiced, which hid the
-            // fact that the counters existed. Now the row is visible from the first launch.
+            Txt("Tap to View Your Progress", 13, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
             TextWithFlame(
                 "Best Streak ${t.bestStreak}",
                 12, FontWeight.Medium, Color.White.copy(alpha = 0.85f),
-                flameSize = 14.dp
+                flameSize = 14.dp,
+                modifier = Modifier.fillMaxWidth() // <-- Forces the text to span the row
             )
         }
         ProgressGlyph()

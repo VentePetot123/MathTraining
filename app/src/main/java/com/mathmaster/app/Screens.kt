@@ -264,7 +264,7 @@ fun WelcomeMessage() {
 fun MenuHeader(vm: TrainerViewModel, onOpenProgress: () -> Unit) {
     val shape = RoundedCornerShape(26.dp)
     val t = vm.totals
-    Row(
+    Column(
         Modifier
             .fillMaxWidth()
             .shadow(10.dp, shape)
@@ -273,22 +273,34 @@ fun MenuHeader(vm: TrainerViewModel, onOpenProgress: () -> Unit) {
             .bounceClick(shape, 0.dp, onClick = onOpenProgress)
             .clip(shape)
             .padding(22.dp),
-        verticalAlignment = Alignment.CenterVertically
+        verticalArrangement = Arrangement.spacedBy(16.dp) // Spacing between Top row and Bottom streak
     ) {
-        Column(
-            Modifier.weight(1f),
-            verticalArrangement = Arrangement.spacedBy(6.dp)
+        // Top Row: Title, Subtitle, and Icon
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
         ) {
-            Txt("Progress Dashboard", 22, FontWeight.ExtraBold, Color.White)
-            Txt("Tap to View Your Progress", 13, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
+            Column(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Txt("Progress Dashboard", 22, FontWeight.ExtraBold, Color.White)
+                Txt("Tap to view your progress", 13, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
+            }
+            ProgressGlyph()
+        }
+
+        // Bottom Row: Streak centered across the full width
+        Box(
+            Modifier.fillMaxWidth(),
+            contentAlignment = Alignment.Center
+        ) {
             TextWithFlame(
                 "Best Streak ${t.bestStreak}",
                 12, FontWeight.Medium, Color.White.copy(alpha = 0.85f),
-                flameSize = 14.dp,
-                modifier = Modifier.fillMaxWidth() // <-- Forces the text to span the row
+                flameSize = 14.dp
             )
         }
-        ProgressGlyph()
     }
 }
 

@@ -332,6 +332,11 @@ class AdaptiveEngine(private val store: Store) {
     // actually change. Invalidated by invalidateDetailsCache(cat) in record() and
     // reset() — both already exist.
     private val detailsCache = HashMap<String, List<FactDetail>>()
+    // Cache HistoryRef per category so buildDashboard() (which runs 3-4 times
+    // per menu refresh) doesn't re-read 128 records × 11 categories from disk
+    // each time. Invalidated on the only two mutation points:
+    // recordSession() (append) and reset() (wipe).
+    private val historyRefCache = HashMap<String, HistoryRef>()
 
     private fun stats(cat: String) = stats.getOrPut(cat) { store.loadStats(cat) }
     private fun window(cat: String) = windows.getOrPut(cat) { store.loadWindow(cat) }
@@ -405,6 +410,7 @@ class AdaptiveEngine(private val store: Store) {
         // FIX #8 — invalidate the details cache so the next details() call rebuilds
         // from the (now empty) stats map.
         invalidateDetailsCache(cat)
+        synchronized(this) { historyRefCache.remove(cat) }
     }
 
     // FIX #8: perf — wipe the cached totals too. Without this, the header keeps
@@ -450,12 +456,22 @@ class AdaptiveEngine(private val store: Store) {
         store.history.append(
             cat, listOf(SessionPoint(score * 100 / total, avgMs, System.currentTimeMillis()))
         )
+        synchronized(this) { historyRefCache.remove(cat) }
     }
 
     fun historyRef(cat: String): HistoryRef {
+        historyRefCache[cat]?.let { return it }
+        // Build outside the lock: disk I/O must not block @Synchronized readers
+        // (mastery / details / summary). First miss after process start pays the
+        // 2 KB read; every subsequent call is a hash lookup.
         val total = store.history.count(cat)
         val tail = if (total >= 2) store.history.read(cat, total - minOf(total, 128), total) else emptyList()
-        return HistoryRef(cat, total, tail) { a, b -> store.history.read(cat, a, b) }
+        val fresh = HistoryRef(cat, total, tail) { a, b -> store.history.read(cat, a, b) }
+        synchronized(this) {
+            historyRefCache[cat]?.let { return it }   // concurrent miss — keep the winner
+            historyRefCache[cat] = fresh
+            return fresh
+        }
     }
 
     /** Pool = already-practiced questions in range; unseen ones wait to be introduced. */

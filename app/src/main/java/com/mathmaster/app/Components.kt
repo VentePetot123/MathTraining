@@ -926,7 +926,7 @@ fun TextWithFlame(
 ) {
     Layout(
         content = {
-            Txt(text, size, weight, color)
+            Txt(text, size, weight, color, align = TextAlign.Center)
             FlameIcon(flameSize)
         },
         modifier = modifier
@@ -1159,7 +1159,7 @@ fun BrokenCrest(color: Color, modifier: Modifier = Modifier) {
 @Composable
 fun HighlightBox(title: String, value: String, color: Color, modifier: Modifier = Modifier, broken: Boolean = false) {
     val c = AppTheme.colors
-    val empty = value == "No data yet" || value == "None yet"
+    val empty = value == "No Data" || value == "None yet"
     Column(
         modifier,
         horizontalAlignment = Alignment.CenterHorizontally,
@@ -1232,8 +1232,8 @@ fun RankTable(
     val c = AppTheme.colors
     val accent = if (strong) c.success else c.error
     val line = Color.White.copy(alpha = 0.14f)
-    var expanded by remember { mutableStateOf(false) }
-    val shown = if (expanded) items.take(100) else items.take(3)
+    var visible by remember { mutableStateOf(3) }
+    val shown = items.take(visible)
 
     Column(
         Modifier.fillMaxWidth().padding(top = 6.dp),
@@ -1252,8 +1252,7 @@ fun RankTable(
                 if (i > 0) Box(Modifier.fillMaxWidth().height(1.dp).background(line))
                 val tint = when (i) { 0 -> 0.30f; 1 -> 0.20f; 2 -> 0.12f; else -> 0f }
                 val count = if (strong) d.correct else d.incorrect
-                val label = if (strong) (if (count == 1) "Correct" else "Corrects")
-                            else (if (count == 1) "Wrong" else "Wrongs")
+                val label = if (strong) "Correct" else "Wrong" // <-- FIX: Removed "Corrects"
 
                 Row(
                     Modifier
@@ -1277,19 +1276,37 @@ fun RankTable(
                     }
                     Box(Modifier.width(1.dp).fillMaxHeight().background(line))
                     Column(
-                        Modifier.width(84.dp).fillMaxHeight().padding(vertical = 7.dp),
+                        Modifier.width(90.dp).fillMaxHeight().padding(vertical = 7.dp), // <-- FIX: widened to fit label
                         horizontalAlignment = Alignment.CenterHorizontally,
                         verticalArrangement = Arrangement.Center
                     ) {
                         Txt("$count", 15, FontWeight.ExtraBold, accent)
                         Txt(label, 10, FontWeight.Medium, c.muted)
+                        Txt("${d.correct}✓ · ${d.incorrect}✗", 9, FontWeight.Medium, c.muted)
                     }
                 }
             }
         }
 
         if (items.size > 3) {
-            ExpandChevron(expanded, enabled = true, color = accent) { expanded = !expanded }
+            Row(
+                Modifier.fillMaxWidth().padding(top = 6.dp),
+                horizontalArrangement = Arrangement.spacedBy(8.dp),
+                verticalAlignment = Alignment.CenterVertically
+            ) {
+                if (visible < items.size) {
+                    SoftButton(
+                        "Show more (${items.size - visible} left)",
+                        Modifier.weight(1f),
+                        size = 12
+                    ) {
+                        visible = if (visible == 3) 25 else (visible + 25).coerceAtMost(items.size)
+                    }
+                }
+                if (visible > 3) {
+                    SoftButton("Collapse", Modifier.weight(1f), size = 12) { visible = 3 }
+                }
+            }
         }
     }
 }

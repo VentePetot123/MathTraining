@@ -70,7 +70,6 @@ import androidx.compose.ui.geometry.Offset
 import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
-import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.PathOperation
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.rotate
@@ -984,7 +983,7 @@ fun StreakCounter(
                 Typeface.create(Typeface.DEFAULT, 800, false)
             else Typeface.DEFAULT_BOLD
         }
-        val r = Rect()
+        val r = android.graphics.Rect()
         paint.getTextBounds(text, 0, text.length, r)
         r
     }

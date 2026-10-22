@@ -975,11 +975,28 @@ fun StreakCounter(
         label = "flickerScale"
     )
 
+    val density = LocalDensity.current
+    val ink = remember(text, density) {
+        val paint = Paint().apply {
+            isAntiAlias = true
+            textSize = with(density) { countSize.sp.toPx() }
+            typeface = if (Build.VERSION.SDK_INT >= 28)
+                Typeface.create(Typeface.DEFAULT, 800, false)
+            else Typeface.DEFAULT_BOLD
+        }
+        val r = Rect()
+        paint.getTextBounds(text, 0, text.length, r)
+        r
+    }
+    val inkH = (ink.bottom - ink.top).toFloat()
+    val flameBoxPx = inkH / 0.96f
+    val dynamicFlameDp = with(density) { flameBoxPx.toDp() }
+
     Layout(
         content = {
             Txt(text, countSize, FontWeight.ExtraBold, color)
             FlameIcon(
-                flameSize,
+                dynamicFlameDp, // <-- Used the dynamically measured height
                 Modifier.graphicsLayer {
                     val lit = flame.coerceIn(0f, 1f)
                     alpha = lit
@@ -995,29 +1012,23 @@ fun StreakCounter(
         val t = measurables[0].measure(Constraints())
         val fl = measurables[1].measure(Constraints())
 
-        // Real ink bounds of the digits (excludes the side bearings of the text box).
-        val paint = Paint().apply {
-            isAntiAlias = true
-            textSize = countSize.sp.toPx()
-            typeface = if (Build.VERSION.SDK_INT >= 28)
-                Typeface.create(Typeface.DEFAULT, 800, false)
-            else Typeface.DEFAULT_BOLD
-        }
-        val b = android.graphics.Rect()
-        paint.getTextBounds(text, 0, text.length, b)
-        val inkLeft = b.left.toFloat()
-        val inkW = (b.right - b.left).toFloat()
+        // Real ink bounds of the digits, computed once outside.
+        val inkLeft = ink.left.toFloat()
+        val inkW = (ink.right - ink.left).toFloat()
 
-        // Visible part of the flame inside its box (the path spans ~0.135..0.865 of the width).
+        // Visible part of the flame inside its box.
         val flameInkL = fl.width * 0.135f
         val flameInkW = fl.width * (0.865f - 0.135f)
 
-        val baseline = t[LastBaseline]
-        val cap = countSize.sp.toPx() * 0.72f
-        val textTop = baseline - cap
-        val flameTop = (baseline - cap / 2f) - fl.height / 2f
-        val minY = minOf(textTop, flameTop)
-        val maxY = maxOf(baseline.toFloat(), flameTop + fl.height)
+        val baseline = t[LastBaseline].toFloat()
+        val digitsTop = baseline + ink.top
+        val digitsBottom = baseline + ink.bottom
+        
+        // Match Claude's top-alignment logic
+        val flameTop = digitsTop - fl.height * 0.02f
+
+        val minY = minOf(digitsTop, flameTop)
+        val maxY = maxOf(digitsBottom, flameTop + fl.height)
 
         val w = constraints.maxWidth.toFloat()
 

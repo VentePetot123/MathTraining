@@ -806,19 +806,19 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (!verdict) rt.missed[f.key] = f
 
-        val stre        val streak = if (verdict) u.streak + 1 else 0
-        
+        val streak = if (verdict) u.streak + 1 else 0
+
         // Track the true best streak for this session (ignores engine slow-penalties)
         if (streak > rt.sessionBestStreak) {
             rt.sessionBestStreak = streak
-            
-            // Update the global best if this is a new record
-            if (streak > store.bestStreak()) {
-                store.updateBest(streak)
-                // CRITICAL: Flush to disk immediately so the new record
-                // isn't lost if the app is closed before the next session flushes.
-                store.flushTotals()
-            }
+        }
+
+        // Update the global best if this is a new record
+        if (streak > store.bestStreak()) {
+            store.updateBest(streak)
+            // CRITICAL: Flush to disk immediately so the new record
+            // isn't lost if the app is closed before the next session flushes.
+            store.flushTotals()
         }ak = if (verdict) u.streak + 1 else 0
         // FIX #8 — Do NOT update best streak here. It is derived automatically.
 

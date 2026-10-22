@@ -1177,6 +1177,7 @@ fun HighlightBox(title: String, value: String, color: Color, modifier: Modifier 
         Box(
             Modifier
                 .fillMaxWidth()
+                .heightIn(min = 54.dp) // <-- Forces a uniform minimum height for both boxes
                 .clip(RoundedCornerShape(14.dp))
                 .background(color.copy(alpha = 0.14f))
                 .border(1.dp, color.copy(alpha = 0.55f), RoundedCornerShape(14.dp))

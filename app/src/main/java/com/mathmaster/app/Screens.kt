@@ -80,7 +80,8 @@ import androidx.compose.ui.text.withStyle
 import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
-import androidx.compose.ui.zIndex
+import androidx.compose.ui.layout.Layout
+import androidx.compose.ui.unit.Constraints
 import androidx.compose.foundation.gestures.Orientation
 import androidx.compose.foundation.gestures.detectDragGestures
 import androidx.compose.foundation.gestures.detectTapGestures
@@ -262,6 +263,105 @@ fun WelcomeMessage() {
 
 @Composable
 fun MenuHeader(vm: TrainerViewModel, onOpenProgress: () -> Unit) {
+    val shape = RoundedCornerShape(26.dp)
+    val t = vm.totals
+    Column(
+        Modifier
+            .fillMaxWidth()
+            .shadow(10.dp, shape)
+            .clip(shape)
+            .background(AppTheme.colors.accent)
+            .bounceClick(shape, 0.dp, onClick = onOpenProgress)
+            .clip(shape)
+            .padding(22.dp),
+        verticalArrangement = Arrangement.spacedBy(16.dp)
+    ) {
+        // Top Row: Title, Subtitle, and Icon
+        Row(
+            Modifier.fillMaxWidth(),
+            verticalAlignment = Alignment.CenterVertically
+        ) {
+            Column(
+                Modifier.weight(1f),
+                verticalArrangement = Arrangement.spacedBy(6.dp)
+            ) {
+                Txt("Progress Dashboard", 22, FontWeight.ExtraBold, Color.White)
+                Txt("Tap to view your progress", 13, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
+            }
+            ProgressGlyph()
+        }
+
+        // Bottom: streak number + flame, centered by their visible ink, label below
+        Column(
+            Modifier.fillMaxWidth(),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(4.dp)
+        ) {
+            val streakText = "${t.bestStreak}"
+            val streakSize = 32          // sp
+            val flameDp = 28.dp
+            val gap = 6.dp
+
+            Layout(
+                content = {
+                    Txt(streakText, streakSize, FontWeight.ExtraBold, Color.White)
+                    FlameIcon(flameDp)
+                }
+            ) { measurables, _ ->
+                val gapPx = gap.roundToPx()
+                val tp = measurables[0].measure(Constraints())
+                val fl = measurables[1].measure(Constraints())
+
+                // Real ink bounds of the digits, relative to the baseline
+                // (b.top is negative = above the baseline). Same weight as the Txt (800).
+                val paint = android.graphics.Paint().apply {
+                    isAntiAlias = true
+                    textSize = streakSize.sp.toPx()
+                    typeface = if (android.os.Build.VERSION.SDK_INT >= 28)
+                        android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, 800, false)
+                    else android.graphics.Typeface.DEFAULT_BOLD
+                }
+                val b = android.graphics.Rect()
+                paint.getTextBounds(streakText, 0, streakText.length, b)
+                val inkLeft = b.left.toFloat()
+                val inkW = (b.right - b.left).toFloat()
+
+                // Visible part of the flame inside its box (path spans ~0.135..0.865 of the width;
+                // vertically it spans ~0.02..0.98, so its box center is its ink center).
+                val flameInkL = fl.width * 0.135f
+                val flameInkW = fl.width * (0.865f - 0.135f)
+
+                // Vertical: flame center = center of the digits' ink, not the padded line box.
+                val baseline = tp[LastBaseline].toFloat()
+                val digitsTop = baseline + b.top
+                val digitsBottom = baseline + b.bottom
+                val digitsCenter = (digitsTop + digitsBottom) / 2f
+                val flameTop = digitsCenter - fl.height / 2f
+
+                val minY = minOf(digitsTop, flameTop)
+                val maxY = maxOf(digitsBottom, flameTop + fl.height)
+
+                // Horizontal: the layout's left edge = left ink edge of the number,
+                // its right edge = right ink edge of the flame. The parent Column
+                // then centers exactly this visible group.
+                val groupW = inkW + gapPx + flameInkW
+                val textX = -inkLeft
+                val flameX = inkW + gapPx - flameInkL
+
+                layout(groupW.roundToInt(), (maxY - minY).roundToInt()) {
+                    tp.placeRelative(textX.roundToInt(), (-minY).roundToInt())
+                    fl.placeRelative(flameX.roundToInt(), (flameTop - minY).roundToInt())
+                }
+            }
+
+            Txt(
+                "Best Overall Streak",
+                12, FontWeight.Medium, Color.White.copy(alpha = 0.85f),
+                align = TextAlign.Center
+            )
+        }
+    }
+}
     val shape = RoundedCornerShape(26.dp)
     val t = vm.totals
     Column(

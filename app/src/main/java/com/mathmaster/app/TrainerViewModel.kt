@@ -819,8 +819,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
             // CRITICAL: Flush to disk immediately so the new record
             // isn't lost if the app is closed before the next session flushes.
             store.flushTotals()
-        }ak = if (verdict) u.streak + 1 else 0
-        // FIX #8 — Do NOT update best streak here. It is derived automatically.
+        }
 
         // FIX #8 — play the appropriate sound effect (if enabled). Fired BEFORE the
         // UI update so the sound and visual feedback feel synchronized.

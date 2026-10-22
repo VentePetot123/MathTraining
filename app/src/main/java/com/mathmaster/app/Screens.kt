@@ -292,7 +292,7 @@ fun MenuHeader(vm: TrainerViewModel, onOpenProgress: () -> Unit) {
             ProgressGlyph()
         }
 
-        // Bottom: streak number + flame, centered by their visible ink, label below
+        // Bottom: streak number + flame, flame exactly as tall as the digits' ink
         Column(
             Modifier.fillMaxWidth(),
             horizontalAlignment = Alignment.CenterHorizontally,
@@ -300,8 +300,28 @@ fun MenuHeader(vm: TrainerViewModel, onOpenProgress: () -> Unit) {
         ) {
             val streakText = "${t.bestStreak}"
             val streakSize = 32          // sp
-            val flameDp = 28.dp
             val gap = 6.dp
+            val density = LocalDensity.current
+
+            // Ink bounds of the digits (relative to the baseline), measured once.
+            val ink = remember(streakText, density) {
+                val paint = android.graphics.Paint().apply {
+                    isAntiAlias = true
+                    textSize = with(density) { streakSize.sp.toPx() }
+                    typeface = if (android.os.Build.VERSION.SDK_INT >= 28)
+                        android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, 800, false)
+                    else android.graphics.Typeface.DEFAULT_BOLD
+                }
+                val r = android.graphics.Rect()
+                paint.getTextBounds(streakText, 0, streakText.length, r)
+                r
+            }
+            val inkH = (ink.bottom - ink.top).toFloat()
+
+            // FlameIcon's path spans 0.02..0.98 of its box height, so the box must be
+            // inkH / 0.96 for the visible flame to be exactly as tall as the digits.
+            val flameBoxPx = inkH / 0.96f
+            val flameDp = with(density) { flameBoxPx.toDp() }
 
             Layout(
                 content = {
@@ -313,38 +333,23 @@ fun MenuHeader(vm: TrainerViewModel, onOpenProgress: () -> Unit) {
                 val tp = measurables[0].measure(Constraints())
                 val fl = measurables[1].measure(Constraints())
 
-                // Real ink bounds of the digits, relative to the baseline
-                // (b.top is negative = above the baseline). Same weight as the Txt (800).
-                val paint = android.graphics.Paint().apply {
-                    isAntiAlias = true
-                    textSize = streakSize.sp.toPx()
-                    typeface = if (android.os.Build.VERSION.SDK_INT >= 28)
-                        android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, 800, false)
-                    else android.graphics.Typeface.DEFAULT_BOLD
-                }
-                val b = android.graphics.Rect()
-                paint.getTextBounds(streakText, 0, streakText.length, b)
-                val inkLeft = b.left.toFloat()
-                val inkW = (b.right - b.left).toFloat()
+                val inkLeft = ink.left.toFloat()
+                val inkW = (ink.right - ink.left).toFloat()
 
-                // Visible part of the flame inside its box (path spans ~0.135..0.865 of the width;
-                // vertically it spans ~0.02..0.98, so its box center is its ink center).
+                // Visible part of the flame horizontally (~0.135..0.865 of its width).
                 val flameInkL = fl.width * 0.135f
                 val flameInkW = fl.width * (0.865f - 0.135f)
 
-                // Vertical: flame center = center of the digits' ink, not the padded line box.
                 val baseline = tp[LastBaseline].toFloat()
-                val digitsTop = baseline + b.top
-                val digitsBottom = baseline + b.bottom
-                val digitsCenter = (digitsTop + digitsBottom) / 2f
-                val flameTop = digitsCenter - fl.height / 2f
+                val digitsTop = baseline + ink.top
+                val digitsBottom = baseline + ink.bottom
+
+                // Put the flame's visible top (0.02 of its box) on the digits' top.
+                val flameTop = digitsTop - fl.height * 0.02f
 
                 val minY = minOf(digitsTop, flameTop)
                 val maxY = maxOf(digitsBottom, flameTop + fl.height)
 
-                // Horizontal: the layout's left edge = left ink edge of the number,
-                // its right edge = right ink edge of the flame. The parent Column
-                // then centers exactly this visible group.
                 val groupW = inkW + gapPx + flameInkW
                 val textX = -inkLeft
                 val flameX = inkW + gapPx - flameInkL
@@ -674,7 +679,7 @@ fun RangeScreen(vm: TrainerViewModel) {
         // was a duplicate of the one in the bottom row; removed to remove ambiguity
         // and to reclaim vertical space.
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-            SoftButton("Menu", Modifier.weight(1f), size = 14) { vm.toMenu() }
+            SoftButton("Main Menu", Modifier.weight(1f), size = 14) { vm.toMenu() }
             GradientButton("Start", Modifier.weight(1f)) { vm.startSession() }
         }
     }
@@ -824,10 +829,10 @@ fun TrainingScreen(vm: TrainerViewModel) {
         if (vm.showQuit) {
             ConfirmDialog(
                 icon = DialogIcon.Exit,
-                title = "Leave session?",
-                message = "Your answers are saved.",
+                title = "Leave Session?",
+                message = "Your Answers Are Saved.",
                 confirmText = "Leave",
-                cancelText = "Keep going",
+                cancelText = "Keep Going",
                 onConfirm = { vm.quit() },
                 onDismiss = { vm.showQuit = false }
             )
@@ -1727,7 +1732,7 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
         if (!vm.categoryDetailFromResults) {
             GradientButton("Practice", Modifier.fillMaxWidth()) { vm.openCategory(cat) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
-                SoftButton("Menu", Modifier.weight(1f), size = 14) { vm.toMenu() }
+                SoftButton("Main Menu", Modifier.weight(1f), size = 14) { vm.toMenu() }
                 SoftButton(
                     "Reset Category",
                     Modifier.weight(1f),

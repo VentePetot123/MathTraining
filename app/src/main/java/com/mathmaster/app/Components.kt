@@ -71,6 +71,7 @@ import androidx.compose.ui.graphics.Brush
 import androidx.compose.ui.geometry.CornerRadius
 import androidx.compose.ui.geometry.Size
 import androidx.compose.ui.graphics.PathOperation
+import androidx.compose.ui.geometry.Rect
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.graphics.drawscope.rotate
 import androidx.compose.ui.graphics.Path
@@ -856,10 +857,20 @@ fun ThemeToggle(isDarkMode: Boolean, onClick: () -> Unit, modifier: Modifier = M
             } else {
                 // Moon: big disc minus an offset disc = crescent
                 val outer = Path().apply {
-                    addOval(Rect(Offset(cx, cy), w * 0.36f))
+                    addOval(
+                        androidx.compose.ui.geometry.Rect(
+                            center = Offset(cx, cy),
+                            radius = w * 0.36f
+                        )
+                    )
                 }
                 val cut = Path().apply {
-                    addOval(Rect(Offset(w * 0.66f, w * 0.36f), w * 0.30f))
+                    addOval(
+                        androidx.compose.ui.geometry.Rect(
+                            center = Offset(w * 0.66f, w * 0.36f),
+                            radius = w * 0.30f
+                        )
+                    )
                 }
                 val moon = Path.combine(PathOperation.Difference, outer, cut)
                 drawPath(moon, tint)

@@ -81,6 +81,8 @@ import androidx.compose.ui.unit.TextUnit
 import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 import androidx.compose.ui.zIndex
+import androidx.compose.foundation.Canvas
+import androidx.compose.ui.graphics.nativeCanvas
 import androidx.compose.ui.layout.Layout
 import androidx.compose.ui.unit.Constraints
 import androidx.compose.foundation.gestures.Orientation
@@ -262,6 +264,22 @@ fun WelcomeMessage() {
     }
 }
 
+// Exact ink bounds of FlameIcon's outer path, as fractions of its box (path copied
+// from Components.kt, built in a 1x1 box; getBounds() is exact for Béziers).
+private val FlameInk: androidx.compose.ui.geometry.Rect by lazy {
+    androidx.compose.ui.graphics.Path().apply {
+        moveTo(0.50f, 0.02f)
+        cubicTo(0.55f, 0.22f, 0.88f, 0.38f, 0.86f, 0.64f)
+        cubicTo(0.85f, 0.85f, 0.68f, 0.98f, 0.50f, 0.98f)
+        cubicTo(0.32f, 0.98f, 0.15f, 0.85f, 0.14f, 0.64f)
+        cubicTo(0.13f, 0.50f, 0.22f, 0.40f, 0.30f, 0.32f)
+        cubicTo(0.30f, 0.44f, 0.36f, 0.50f, 0.42f, 0.52f)
+        cubicTo(0.38f, 0.32f, 0.44f, 0.14f, 0.50f, 0.02f)
+        close()
+    }.getBounds()
+}
+
+
 @Composable
 fun MenuHeader(vm: TrainerViewModel, onOpenProgress: () -> Unit) {
     val shape = RoundedCornerShape(26.dp)
@@ -303,60 +321,55 @@ fun MenuHeader(vm: TrainerViewModel, onOpenProgress: () -> Unit) {
             val gap = 6.dp
             val density = LocalDensity.current
 
-            // Ink bounds of the digits (relative to the baseline), measured once.
-            val ink = remember(streakText, density) {
-                val paint = android.graphics.Paint().apply {
+            // One Paint is used for BOTH measuring and drawing, so the ink box is exact.
+            val (paint, ink) = remember(streakText, density) {
+                val p = android.graphics.Paint().apply {
                     isAntiAlias = true
                     textSize = with(density) { streakSize.sp.toPx() }
+                    color = android.graphics.Color.WHITE
                     typeface = if (android.os.Build.VERSION.SDK_INT >= 28)
                         android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, 800, false)
                     else android.graphics.Typeface.DEFAULT_BOLD
                 }
                 val r = android.graphics.Rect()
-                paint.getTextBounds(streakText, 0, streakText.length, r)
-                r
+                p.getTextBounds(streakText, 0, streakText.length, r)
+                p to r
             }
-            val inkH = (ink.bottom - ink.top).toFloat()
 
-            // FlameIcon's path spans 0.02..0.98 of its box height, so the box must be
-            // inkH / 0.96 for the visible flame to be exactly as tall as the digits.
-            val flameBoxPx = inkH / 0.96f
-            val flameDp = with(density) { flameBoxPx.toDp() }
+            val inkWpx = ink.width().coerceAtLeast(1)
+            val inkHpx = ink.height().coerceAtLeast(1)
+
+            // Flame box sized so its visible (ink) height equals the digits' ink height.
+            val fi = FlameInk
+            val flameSidePx = (inkHpx / (fi.bottom - fi.top)).roundToInt().coerceAtLeast(1)
+            val flameDp = with(density) { flameSidePx.toDp() }
 
             Layout(
                 content = {
-                    Txt(streakText, streakSize, FontWeight.ExtraBold, Color.White)
+                    // Canvas is exactly the digits' ink box; origin shifted so ink starts at (0,0).
+                    Canvas(Modifier.fillMaxSize()) {
+                        drawContext.canvas.nativeCanvas.drawText(
+                            streakText, -ink.left.toFloat(), -ink.top.toFloat(), paint
+                        )
+                    }
                     FlameIcon(flameDp)
                 }
             ) { measurables, _ ->
                 val gapPx = gap.roundToPx()
-                val tp = measurables[0].measure(Constraints())
-                val fl = measurables[1].measure(Constraints())
+                val textP = measurables[0].measure(Constraints.fixed(inkWpx, inkHpx))
+                val flameP = measurables[1].measure(Constraints.fixed(flameSidePx, flameSidePx))
 
-                val inkLeft = ink.left.toFloat()
-                val inkW = (ink.right - ink.left).toFloat()
+                val flameInkL = flameSidePx * fi.left
+                val flameInkW = flameSidePx * (fi.right - fi.left)
 
-                // Visible part of the flame horizontally (~0.135..0.865 of its width).
-                val flameInkL = fl.width * 0.135f
-                val flameInkW = fl.width * (0.865f - 0.135f)
+                // Layout box == visible ink of digits + gap + visible ink of flame, edge to edge.
+                val groupW = (inkWpx + gapPx + flameInkW).roundToInt()
+                val flameX = (inkWpx + gapPx - flameInkL).roundToInt()
+                val flameY = (-flameSidePx * fi.top).roundToInt()   // flame ink top == digits ink top
 
-                val baseline = tp[LastBaseline].toFloat()
-                val digitsTop = baseline + ink.top
-                val digitsBottom = baseline + ink.bottom
-
-                // Put the flame's visible top (0.02 of its box) on the digits' top.
-                val flameTop = digitsTop - fl.height * 0.02f
-
-                val minY = minOf(digitsTop, flameTop)
-                val maxY = maxOf(digitsBottom, flameTop + fl.height)
-
-                val groupW = inkW + gapPx + flameInkW
-                val textX = -inkLeft
-                val flameX = inkW + gapPx - flameInkL
-
-                layout(groupW.roundToInt(), (maxY - minY).roundToInt()) {
-                    tp.placeRelative(textX.roundToInt(), (-minY).roundToInt())
-                    fl.placeRelative(flameX.roundToInt(), (flameTop - minY).roundToInt())
+                layout(groupW, inkHpx) {
+                    textP.place(0, 0)                // place(), not placeRelative(): ink math is LTR
+                    flameP.place(flameX, flameY)
                 }
             }
 

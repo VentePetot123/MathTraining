@@ -362,56 +362,6 @@ fun MenuHeader(vm: TrainerViewModel, onOpenProgress: () -> Unit) {
         }
     }
 }
-    val shape = RoundedCornerShape(26.dp)
-    val t = vm.totals
-    Column(
-        Modifier
-            .fillMaxWidth()
-            .shadow(10.dp, shape)
-            .clip(shape)
-            .background(AppTheme.colors.accent)
-            .bounceClick(shape, 0.dp, onClick = onOpenProgress)
-            .clip(shape)
-            .padding(22.dp),
-        verticalArrangement = Arrangement.spacedBy(16.dp) // Spacing between Top row and Bottom streak
-    ) {
-        // Top Row: Title, Subtitle, and Icon
-        Row(
-            Modifier.fillMaxWidth(),
-            verticalAlignment = Alignment.CenterVertically
-        ) {
-            Column(
-                Modifier.weight(1f),
-                verticalArrangement = Arrangement.spacedBy(6.dp)
-            ) {
-                Txt("Progress Dashboard", 22, FontWeight.ExtraBold, Color.White)
-                Txt("Tap to view your progress", 13, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
-            }
-            ProgressGlyph()
-        }
-
-        // Bottom Row: Streak perfectly centered across the full width
-        Column(
-            Modifier.fillMaxWidth(),
-            horizontalAlignment = Alignment.CenterHorizontally,
-            verticalArrangement = Arrangement.spacedBy(4.dp)
-        ) {
-            Row(
-                verticalAlignment = Alignment.CenterVertically,
-                horizontalArrangement = Arrangement.Center
-            ) {
-                Txt("${t.bestStreak}", 32, FontWeight.ExtraBold, Color.White)
-                Spacer(Modifier.width(6.dp))
-                FlameIcon(28.dp)
-            }
-            Txt(
-                "Best Overall Streak",
-                12, FontWeight.Medium, Color.White.copy(alpha = 0.85f),
-                align = TextAlign.Center
-            )
-        }
-    }
-}
 
 @Composable
 fun CategoryCard(index: Int, cat: Category, s: CatSummary?, onClick: () -> Unit) {

@@ -806,7 +806,20 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (!verdict) rt.missed[f.key] = f
 
-        val streak = if (verdict) u.streak + 1 else 0
+        val stre        val streak = if (verdict) u.streak + 1 else 0
+        
+        // Track the true best streak for this session (ignores engine slow-penalties)
+        if (streak > rt.sessionBestStreak) {
+            rt.sessionBestStreak = streak
+            
+            // Update the global best if this is a new record
+            if (streak > store.bestStreak()) {
+                store.updateBest(streak)
+                // CRITICAL: Flush to disk immediately so the new record
+                // isn't lost if the app is closed before the next session flushes.
+                store.flushTotals()
+            }
+        }ak = if (verdict) u.streak + 1 else 0
         // FIX #8 — Do NOT update best streak here. It is derived automatically.
 
         // FIX #8 — play the appropriate sound effect (if enabled). Fired BEFORE the
@@ -886,7 +899,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
             categoryId = u.categoryId,
             score = u.score,
             total = u.total,
-            best = u.best,
+            best = rt.sessionBestStreak, // Use the true session streak
             missed = rt.missed.values.map { it.solution },
             improved = rt.improved,
             introduced = rt.introduced,

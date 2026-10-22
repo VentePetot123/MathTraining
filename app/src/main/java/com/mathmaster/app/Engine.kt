@@ -43,6 +43,7 @@ class SessionRuntime {
     // the aggregate without re-reading per-question stats off the main thread.
     var totalMs: Long = 0L
     var answerCount: Int = 0
+    var sessionBestStreak: Int = 0
 }
 
 /** SharedPreferences + JSON persistence. */

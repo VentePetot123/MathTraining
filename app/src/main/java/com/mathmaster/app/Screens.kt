@@ -258,7 +258,7 @@ fun WelcomeMessage() {
     ) {
         Txt("$greeting!", 20, FontWeight.ExtraBold, c.onBackground, align = TextAlign.Center)
         Txt("Welcome to Your Training", 14, FontWeight.SemiBold, c.accentA, align = TextAlign.Center)
-        Txt("Pick a category and let's sharpen your mind.", 12, FontWeight.Medium, c.muted, align = TextAlign.Center)
+        Txt("Pick a Category and Let's Sharpen Your Mind.", 12, FontWeight.Medium, c.muted, align = TextAlign.Center)
     }
 }
 
@@ -675,7 +675,7 @@ fun RangeScreen(vm: TrainerViewModel) {
         // and to reclaim vertical space.
         Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
             SoftButton("Menu", Modifier.weight(1f), size = 14) { vm.toMenu() }
-            GradientButton("Start Practice", Modifier.weight(1f)) { vm.startSession() }
+            GradientButton("Start", Modifier.weight(1f)) { vm.startSession() }
         }
     }
 
@@ -1646,8 +1646,8 @@ fun ProgressScreen(vm: TrainerViewModel) {
         if (resetStep == 2) {
             ConfirmDialog(
                 icon = DialogIcon.Warning,
-                title = "Are you sure?",
-                message = "All progress will be erased. This can't be undone.",
+                title = "Are You Sure?",
+                message = "All Progress Will Be Erased. This Can't Be Undone.",
                 confirmText = "Erase All",
                 step = 2,
                 onConfirm = { vm.resetAllProgress(); resetStep = 0 },
@@ -1725,7 +1725,7 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
         // again would be redundant (Results already has those actions). The screen
         // becomes a pure progress view in that case.
         if (!vm.categoryDetailFromResults) {
-            GradientButton("Start Practice", Modifier.fillMaxWidth()) { vm.openCategory(cat) }
+            GradientButton("Practice", Modifier.fillMaxWidth()) { vm.openCategory(cat) }
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(8.dp)) {
                 SoftButton("Menu", Modifier.weight(1f), size = 14) { vm.toMenu() }
                 SoftButton(

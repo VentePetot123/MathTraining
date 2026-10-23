@@ -1444,12 +1444,12 @@ fun ResultsScreen(vm: TrainerViewModel) {
             // Row 2
             Row(Modifier.fillMaxWidth(), horizontalArrangement = Arrangement.spacedBy(10.dp)) {
                 SoftButton(
-                    "Back to Category", 
+                    "Category", 
                     Modifier.weight(1f),
                     onClick = { vm.openCategory(currentCategory) }
                 )
                 SoftButton(
-                    "Back to Main Menu", 
+                    "Main Menu", 
                     Modifier.weight(1f)
                 ) { vm.toMenu() }
             }

@@ -723,7 +723,12 @@ private fun ChartPanel(
                     )
                 )
                 drawPath(line, color, style = Stroke(width = 2.dp.toPx(), cap = StrokeCap.Round))
-                if (i1 == total - 1) drawCircle(color, 3.5.dp.toPx(), Offset(x(i1), y(at(i1))))
+                if (i1 == total - 1) {
+                    val dotRadius = 3.5.dp.toPx()
+                    // Constrain the X coordinate so the full circle remains inside the canvas
+                    val dotX = x(i1).coerceAtMost(w - dotRadius)
+                    drawCircle(color, dotRadius, Offset(dotX, y(at(i1))))
+                }
             }
         }
 

@@ -682,7 +682,7 @@ fun RangeScreen(vm: TrainerViewModel) {
 
         // ---- Compact stat line ----
         val s = vm.menuStats[cat.id]
-        val statText = if (s == null || s.attempts == 0) "No practice data yet for this category"
+        val statText = if (s == null || s.attempts == 0) "No Practice Data Yet for this Category"
         else "${s.attempts} attempts · ${s.accuracyPct}% accuracy"
         Txt(statText, 11, FontWeight.Medium, c.muted, Modifier.fillMaxWidth(), TextAlign.Center)
 

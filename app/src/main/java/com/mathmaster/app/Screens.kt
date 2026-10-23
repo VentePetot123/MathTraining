@@ -1449,7 +1449,7 @@ fun ResultsScreen(vm: TrainerViewModel) {
                     onClick = { vm.openCategory(currentCategory) }
                 )
                 SoftButton(
-                    "Main Menu", 
+                    "Back to Main Menu", 
                     Modifier.weight(1f)
                 ) { vm.toMenu() }
             }

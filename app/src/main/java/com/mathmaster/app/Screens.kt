@@ -1665,7 +1665,7 @@ fun ProgressScreen(vm: TrainerViewModel) {
             ConfirmDialog(
                 icon = DialogIcon.Warning,
                 title = "Are You Sure?",
-                message = "All Progress Will Be Erased. This Can't Be Undone.",
+                message = "All Progress Will Be Erased.\nThis Can't Be Undone.",
                 confirmText = "Erase All",
                 step = 2,
                 onConfirm = { vm.resetAllProgress(); resetStep = 0 },

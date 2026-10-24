@@ -64,6 +64,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
@@ -278,7 +279,9 @@ fun SoftButton(
 @Composable
 fun CompactCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val c = AppTheme.colors
-    val shape = RoundedCornerShape(18.dp)
+    val cornerDp = 18.dp
+    val shape = RoundedCornerShape(cornerDp)
+    val borderColor = c.borderColor
     Column(
         modifier
             .fillMaxWidth()
@@ -288,10 +291,19 @@ fun CompactCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.
                 spotColor = Color.Black.copy(alpha = 0.12f)
             )
             .clip(shape)
-            // Draw the border over the solid background, inside the clip.
-            // This avoids the corner-stretching artifact and uses standard Compose APIs.
             .background(c.surface)
-            .border(1.dp, c.borderColor, shape)
+            .drawBehind {
+                val strokePx = 1.dp.toPx()
+                val half = strokePx / 2f
+                val radius = (cornerDp.toPx() - half).coerceAtLeast(0f)
+                drawRoundRect(
+                    color = borderColor,
+                    topLeft = Offset(half, half),
+                    size = Size(size.width - strokePx, size.height - strokePx),
+                    cornerRadius = CornerRadius(radius, radius),
+                    style = Stroke(width = strokePx)
+                )
+            }
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
         content = content

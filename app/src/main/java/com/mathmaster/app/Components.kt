@@ -65,6 +65,7 @@ import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
+import androidx.compose.ui.graphics.compositeOver
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
@@ -281,27 +282,35 @@ fun CompactCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.
     val c = AppTheme.colors
     val cornerDp = 18.dp
     val shape = RoundedCornerShape(cornerDp)
-    val borderColor = c.borderColor
+    val fill = c.surface
+    // Flatten the faint purple into a solid color so nothing blends with the shadow.
+    val ring = c.borderColor.compositeOver(c.surface)
+
     Column(
         modifier
             .fillMaxWidth()
             .shadow(
-                elevation = 4.dp, shape = shape, clip = false,
-                ambientColor = Color.Black.copy(alpha = 0.08f),
-                spotColor = Color.Black.copy(alpha = 0.12f)
+                elevation = 2.dp, shape = shape, clip = false,
+                ambientColor = Color.Black.copy(alpha = 0.04f),
+                spotColor = Color.Black.copy(alpha = 0.07f)
             )
-            .clip(shape)
-            .background(c.surface)
             .drawBehind {
-                val strokePx = 1.dp.toPx()
-                val half = strokePx / 2f
-                val radius = (cornerDp.toPx() - half).coerceAtLeast(0f)
+                val corner = cornerDp.toPx()
+                // Whole-pixel ring width so both edges land exactly on pixel boundaries.
+                val ringPx = kotlin.math.round(1.dp.toPx()).coerceAtLeast(1f)
+
+                // Outer shape in the border color.
                 drawRoundRect(
-                    color = borderColor,
-                    topLeft = Offset(half, half),
-                    size = Size(size.width - strokePx, size.height - strokePx),
-                    cornerRadius = CornerRadius(radius, radius),
-                    style = Stroke(width = strokePx)
+                    color = ring,
+                    cornerRadius = CornerRadius(corner, corner)
+                )
+                // Inner shape in the surface color: inset by ringPx, radius reduced by ringPx.
+                val innerR = (corner - ringPx).coerceAtLeast(0f)
+                drawRoundRect(
+                    color = fill,
+                    topLeft = Offset(ringPx, ringPx),
+                    size = Size(size.width - 2f * ringPx, size.height - 2f * ringPx),
+                    cornerRadius = CornerRadius(innerR, innerR)
                 )
             }
             .padding(horizontal = 14.dp, vertical = 12.dp),

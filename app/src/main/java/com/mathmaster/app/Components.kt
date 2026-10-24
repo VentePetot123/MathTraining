@@ -66,6 +66,8 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.addOutline
+import androidx.compose.ui.graphics.drawscope.drawOutline
 import androidx.compose.ui.graphics.PathFillType
 import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.draw.drawWithContent
@@ -282,11 +284,10 @@ fun SoftButton(
 @Composable
 fun CompactCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val c = AppTheme.colors
-    val cornerDp = 18.dp
-    val shape = RoundedCornerShape(cornerDp)
+    val shape = RoundedCornerShape(18.dp)
     val fill = c.surface
-    // Solid, opaque faint purple (no transparency left on screen).
-    val ring = c.accentA.copy(alpha = 0.35f).compositeOver(c.surface)
+    // Opaque version of the faint purple, so it looks the same in light and dark mode.
+    val ring = c.borderColor.compositeOver(c.surface)
 
     Column(
         modifier
@@ -297,28 +298,14 @@ fun CompactCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.
                 spotColor = Color.Black.copy(alpha = 0.07f)
             )
             .drawBehind {
-                val corner = cornerDp.toPx()
+                val outline = shape.createOutline(size, layoutDirection, this)
                 val t = 1.5.dp.toPx()
 
-                // 1) Fill the whole card.
-                drawRoundRect(color = fill, cornerRadius = CornerRadius(corner, corner))
-
-                // 2) One ring path: outer minus inner, so the edge is anti-aliased once.
-                val outer = RoundRect(
-                    0f, 0f, size.width, size.height,
-                    CornerRadius(corner, corner)
-                )
-                val innerR = (corner - t).coerceAtLeast(0f)
-                val inner = RoundRect(
-                    t, t, size.width - t, size.height - t,
-                    CornerRadius(innerR, innerR)
-                )
-                val path = Path().apply {
-                    fillType = PathFillType.EvenOdd
-                    addRoundRect(outer)
-                    addRoundRect(inner)
+                // Fill and border both use the exact same outline.
+                drawOutline(outline, color = fill)
+                clipPath(Path().apply { addOutline(outline) }) {
+                    drawOutline(outline, color = ring, style = Stroke(width = t * 2f))
                 }
-                drawPath(path, ring)
             }
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),

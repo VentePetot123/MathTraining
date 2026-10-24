@@ -66,11 +66,6 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.compositeOver
-import androidx.compose.ui.graphics.addOutline
-import androidx.compose.ui.graphics.drawOutline
-import androidx.compose.ui.graphics.PathFillType
-import androidx.compose.ui.geometry.RoundRect
-import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -284,28 +279,46 @@ fun SoftButton(
 @Composable
 fun CompactCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val c = AppTheme.colors
-    val shape = RoundedCornerShape(18.dp)
-    val fill = c.surface
-    // Opaque version of the faint purple, so it looks the same in light and dark mode.
+    val surface = c.surface
+    // Faint purple, flattened to an opaque color (works in light and dark mode).
     val ring = c.borderColor.compositeOver(c.surface)
 
     Column(
         modifier
             .fillMaxWidth()
-            .shadow(
-                elevation = 2.dp, shape = shape, clip = false,
-                ambientColor = Color.Black.copy(alpha = 0.04f),
-                spotColor = Color.Black.copy(alpha = 0.07f)
-            )
             .drawBehind {
-                val outline = shape.createOutline(size, layoutDirection, this)
-                val t = 1.5.dp.toPx()
+                val corner = 18.dp.toPx()
+                // Whole-pixel border width, never thinner than 1px.
+                val t = kotlin.math.round(1.dp.toPx()).coerceAtLeast(1f)
 
-                // Fill and border both use the exact same outline.
-                drawOutline(outline, color = fill)
-                clipPath(Path().apply { addOutline(outline) }) {
-                    drawOutline(outline, color = ring, style = Stroke(width = t * 2f))
+                // 1) Soft shadow: stacked translucent rounded rects, widest first.
+                //    Only the part outside the card stays visible; the card covers the rest.
+                val spread = 6.dp.toPx()
+                val dy = 2.dp.toPx()
+                for (i in 5 downTo 1) {
+                    val g = spread * i / 5
+                    drawRoundRect(
+                        color = Color.Black.copy(alpha = 0.018f),
+                        topLeft = Offset(-g, -g + dy),
+                        size = Size(size.width + 2f * g, size.height + 2f * g),
+                        cornerRadius = CornerRadius(corner + g, corner + g)
+                    )
                 }
+
+                // 2) Border: a solid rounded rect in the border color.
+                drawRoundRect(
+                    color = ring,
+                    cornerRadius = CornerRadius(corner, corner)
+                )
+
+                // 3) Fill: inset by the border width, radius reduced by the same amount.
+                val innerR = (corner - t).coerceAtLeast(0f)
+                drawRoundRect(
+                    color = surface,
+                    topLeft = Offset(t, t),
+                    size = Size(size.width - 2f * t, size.height - 2f * t),
+                    cornerRadius = CornerRadius(innerR, innerR)
+                )
             }
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),

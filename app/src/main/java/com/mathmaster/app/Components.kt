@@ -278,6 +278,7 @@ fun SoftButton(
 fun CompactCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val c = AppTheme.colors
     val shape = RoundedCornerShape(18.dp)
+    val outline = c.borderColor
     Column(
         modifier
             .fillMaxWidth()
@@ -288,7 +289,16 @@ fun CompactCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.
             )
             .clip(shape)
             .background(c.surface)
-            .border(1.dp, c.borderColor, shape)
+            .drawWithContent {
+                drawContent()
+                // Draw a smooth 1.5dp outline via the native Canvas, 
+                // which prevents the corner-stretching artifact.
+                drawOutline(
+                    outline = outline,
+                    shape = shape,
+                    strokeWidth = 1.5.dp.toPx()
+                )
+            }
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
         content = content

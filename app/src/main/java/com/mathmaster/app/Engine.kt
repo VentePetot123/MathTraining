@@ -22,7 +22,7 @@ data class QStat(
     val attempts: Int get() = correct + incorrect
 }
 
-data class CatSummary(val attempts: Int, val accuracyPct: Int, val facts: Int)
+data class CatSummary(val attempts: Int, val accuracyPct: Int, val facts: Int, val sessions: Int)
 
 data class SessionPoint(val accuracyPct: Int, val avgMs: Int, val at: Long = 0L)
 
@@ -246,6 +246,17 @@ class Store(context: Context) {
         cachedTotals = Triple(answers, sessions, best)
         totalsDirty = true
     }
+    // One-time repair: older builds derived best_streak from per-question streaks,
+    // which could exceed any real session streak. The true value can't be recovered,
+    // so reset it once; the next session re-establishes the genuine record.
+    fun repairBestStreakOnce() {
+        if (prefs.getBoolean("best_streak_repaired_v1", false)) return
+        val (a, s, _) = loadTotals()
+        cachedTotals = Triple(a, s, 0)
+        totalsDirty = true
+        flushTotals()
+        prefs.edit().putBoolean("best_streak_repaired_v1", true).apply()
+    }
     fun isSoundEnabled(): Boolean = prefs.getBoolean("sound_enabled", true)
     fun getThemeMode(): String = prefs.getString("theme_mode", "System") ?: "System"
     fun setThemeMode(name: String) { prefs.edit().putString("theme_mode", name).apply() }
@@ -396,10 +407,13 @@ class AdaptiveEngine(private val store: Store) {
         val all = stats(cat).values
         val attempts = all.sumOf { it.attempts }
         val correct = all.sumOf { it.correct }
+        // Read the actual number of completed sessions for this category
+        val sessions = store.history.count(cat)
         return CatSummary(
             attempts,
             if (attempts > 0) correct * 100 / attempts else 0,
-            all.count { it.attempts > 0 }
+            all.count { it.attempts > 0 },
+            sessions
         )
     }
     @Synchronized
@@ -431,7 +445,6 @@ class AdaptiveEngine(private val store: Store) {
     fun recomputeTotalsFromStats() {
         var totalCorrect = 0
         var totalIncorrect = 0
-        var bestStreak = 0
         var totalSessions = 0
 
         for (cat in Categories.all) {
@@ -440,14 +453,15 @@ class AdaptiveEngine(private val store: Store) {
             for (s in map.values) {
                 totalCorrect += s.correct
                 totalIncorrect += s.incorrect
-                if (s.streak > bestStreak) bestStreak = s.streak
             }
             // 2. Sum up the completed sessions for this category
             totalSessions += store.history.count(cat.id)
         }
 
         // Update the global cache with the exact numbers derived from the saved data.
-        store.setTotals(totalCorrect + totalIncorrect, totalSessions, bestStreak)
+        // Best streak is a session record (set in submit()), never derived from
+        // per-question QStat.streak, which spans sessions.
+        store.setTotals(totalCorrect + totalIncorrect, totalSessions, store.bestStreak())
     }
 
     // Deliberately NOT @Synchronized: HistoryStore has its own lock, and the engine lock

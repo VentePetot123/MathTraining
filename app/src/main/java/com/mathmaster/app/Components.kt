@@ -66,6 +66,8 @@ import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
 import androidx.compose.ui.draw.drawBehind
 import androidx.compose.ui.graphics.compositeOver
+import androidx.compose.ui.graphics.PathFillType
+import androidx.compose.ui.geometry.RoundRect
 import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
@@ -283,8 +285,8 @@ fun CompactCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.
     val cornerDp = 18.dp
     val shape = RoundedCornerShape(cornerDp)
     val fill = c.surface
-    // Flatten the faint purple into a solid color so nothing blends with the shadow.
-    val ring = c.borderColor.compositeOver(c.surface)
+    // Solid, opaque faint purple (no transparency left on screen).
+    val ring = c.accentA.copy(alpha = 0.35f).compositeOver(c.surface)
 
     Column(
         modifier
@@ -296,22 +298,27 @@ fun CompactCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.
             )
             .drawBehind {
                 val corner = cornerDp.toPx()
-                // Whole-pixel ring width so both edges land exactly on pixel boundaries.
-                val ringPx = kotlin.math.round(1.dp.toPx()).coerceAtLeast(1f)
+                val t = 1.5.dp.toPx()
 
-                // Outer shape in the border color.
-                drawRoundRect(
-                    color = ring,
-                    cornerRadius = CornerRadius(corner, corner)
+                // 1) Fill the whole card.
+                drawRoundRect(color = fill, cornerRadius = CornerRadius(corner, corner))
+
+                // 2) One ring path: outer minus inner, so the edge is anti-aliased once.
+                val outer = RoundRect(
+                    0f, 0f, size.width, size.height,
+                    CornerRadius(corner, corner)
                 )
-                // Inner shape in the surface color: inset by ringPx, radius reduced by ringPx.
-                val innerR = (corner - ringPx).coerceAtLeast(0f)
-                drawRoundRect(
-                    color = fill,
-                    topLeft = Offset(ringPx, ringPx),
-                    size = Size(size.width - 2f * ringPx, size.height - 2f * ringPx),
-                    cornerRadius = CornerRadius(innerR, innerR)
+                val innerR = (corner - t).coerceAtLeast(0f)
+                val inner = RoundRect(
+                    t, t, size.width - t, size.height - t,
+                    CornerRadius(innerR, innerR)
                 )
+                val path = Path().apply {
+                    fillType = PathFillType.EvenOdd
+                    addRoundRect(outer)
+                    addRoundRect(inner)
+                }
+                drawPath(path, ring)
             }
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),

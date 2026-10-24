@@ -1206,7 +1206,7 @@ fun HighlightBox(title: String, value: String, color: Color, modifier: Modifier 
         Box(
             Modifier
                 .fillMaxWidth()
-                .heightIn(min = 54.dp) // <-- Forces a uniform minimum height for both boxes
+                .heightIn(min = 58.dp) // Slightly increased minimum height to fit the larger text
                 .clip(RoundedCornerShape(14.dp))
                 .background(color.copy(alpha = 0.14f))
                 .border(1.dp, color.copy(alpha = 0.55f), RoundedCornerShape(14.dp))
@@ -1215,7 +1215,7 @@ fun HighlightBox(title: String, value: String, color: Color, modifier: Modifier 
         ) {
             Txt(
                 value,
-                if (empty) 12 else 16,
+                if (empty) 14 else 22, // <-- INCREASED: 12 -> 14 for empty, 16 -> 22 for facts
                 if (empty) FontWeight.Medium else FontWeight.ExtraBold,
                 if (empty) c.muted else c.onBackground,
                 align = TextAlign.Center

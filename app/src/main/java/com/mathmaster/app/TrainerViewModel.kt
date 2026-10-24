@@ -213,6 +213,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         // FIX #8: perf — one-time migration for the powers split. Runs on IO before
         // the first menu read so the migrated data is already in place.
         store.migratePowersSplit()
+        store.repairBestStreakOnce()
                 runCatching { store.migrateHistoryToFiles() }   // can never block startup
 
         // FIX #8: perf — warm-up pass. Every heavy operation the app does on its
@@ -545,7 +546,15 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         // FIX #6: every session gets a brand-new UiSession (answered = 0, new id).
         // Progress is derived ONLY from this object, never stored in a view or in saved
         // instance state, so the bar always starts at 0 and shows only this session.
-        ui = UiSession(id = System.nanoTime(), categoryId = c.id, total = questionCount)
+        ui = UiSession(
+            id = System.nanoTime(),
+            categoryId = c.id,
+            total = questionCount,
+            answered = 0,
+            score = 0,
+            streak = 0,
+            best = 0
+        )
         results = null
         showQuit = false
 
@@ -806,7 +815,8 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         }
         if (!verdict) rt.missed[f.key] = f
 
-        val streak = if (verdict) u.streak + 1 else 0
+        // A streak can never exceed the number of questions in this session.
+        val streak = if (verdict) minOf(u.streak + 1, u.total) else 0
 
         // Track the true best streak for this session (ignores engine slow-penalties)
         if (streak > rt.sessionBestStreak) {

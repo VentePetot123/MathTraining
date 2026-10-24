@@ -1833,7 +1833,7 @@ fun CategoryProgressSection(
 ) {
     val c = AppTheme.colors
     val clickMod = if (onOpen != null)
-        Modifier.bounceClick(RoundedCornerShape(18.dp), 4.dp, onClick = onOpen)
+        Modifier.bounceClick(RoundedCornerShape(18.dp), 0.dp, onClick = onOpen)
     else Modifier
 
     CompactCard(clickMod) {

@@ -279,40 +279,18 @@ fun SoftButton(
 @Composable
 fun CompactCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val c = AppTheme.colors
-    val cornerDp = 18.dp
-    val shape = RoundedCornerShape(cornerDp)
-    val surface = c.surface
-    // Opaque border color, matches the visual weight of the faint purple.
-    val ring = c.borderColor.compositeOver(c.surface)
-    // Border width in whole pixels, minimum 1px.
-    val borderPx = remember { kotlin.math.round(1.dp.value).coerceAtLeast(1f) }
-
+    val shape = RoundedCornerShape(18.dp)
     Column(
         modifier
             .fillMaxWidth()
-            // Platform shadow so the border has the same visual weight
-            // as the cards on the Category Detail screen.
             .shadow(
                 elevation = 4.dp, shape = shape, clip = false,
-                ambientColor = Color.Black.copy(alpha = 0.10f),
-                spotColor = Color.Black.copy(alpha = 0.15f)
+                ambientColor = Color.Black.copy(alpha = 0.08f),
+                spotColor = Color.Black.copy(alpha = 0.12f)
             )
-            .drawBehind {
-                val corner = cornerDp.toPx()
-                // 1) Border: full card bounds, in border color.
-                drawRoundRect(
-                    color = ring,
-                    cornerRadius = CornerRadius(corner, corner)
-                )
-                // 2) Fill: inset by borderPx, radius reduced by borderPx.
-                val innerR = (corner - borderPx).coerceAtLeast(0f)
-                drawRoundRect(
-                    color = surface,
-                    topLeft = Offset(borderPx, borderPx),
-                    size = Size(size.width - 2f * borderPx, size.height - 2f * borderPx),
-                    cornerRadius = CornerRadius(innerR, innerR)
-                )
-            }
+            .clip(shape)
+            .background(c.surface)
+            .border(1.dp, c.borderColor, shape)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
         content = content

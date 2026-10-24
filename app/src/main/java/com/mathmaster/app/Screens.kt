@@ -260,7 +260,7 @@ fun WelcomeMessage() {
     ) {
         Txt("$greeting!", 20, FontWeight.ExtraBold, c.onBackground, align = TextAlign.Center)
         Txt("Welcome to Your Training", 14, FontWeight.SemiBold, c.accentA, align = TextAlign.Center)
-        Txt("Pick a Category and Let's Sharpen Your Mind.", 12, FontWeight.Medium, c.muted, align = TextAlign.Center)
+        Txt("Pick a Category and Let's Sharpen Your Mind", 12, FontWeight.Medium, c.muted, align = TextAlign.Center)
     }
 }
 
@@ -305,7 +305,7 @@ fun MenuHeader(vm: TrainerViewModel, onOpenProgress: () -> Unit) {
                 verticalArrangement = Arrangement.spacedBy(6.dp)
             ) {
                 Txt("Progress Dashboard", 22, FontWeight.ExtraBold, Color.White)
-                Txt("Tap to view your progress", 13, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
+                Txt("Tap to View Your Progress", 13, FontWeight.Normal, Color.White.copy(alpha = 0.9f))
             }
             ProgressGlyph()
         }
@@ -426,10 +426,10 @@ fun CategoryCard(index: Int, cat: Category, s: CatSummary?, onClick: () -> Unit)
                     Modifier.fillMaxWidth(),
                     horizontalAlignment = Alignment.End
                 ) {
-                    if (s == null || s.attempts == 0) {
-                        Txt("Not practiced yet", 11, FontWeight.Medium, Color.White.copy(alpha = 0.9f))
+                    if (s == null || s.sessions == 0) {
+                        Txt("Not Practiced Yet", 11, FontWeight.Medium, Color.White.copy(alpha = 0.9f))
                     } else {
-                        Txt("${formatAttempts(s.attempts)} Attempts", 11, FontWeight.Medium, Color.White.copy(alpha = 0.9f))
+                        Txt("${formatAttempts(s.sessions)} Sessions", 11, FontWeight.Medium, Color.White.copy(alpha = 0.9f))
                         Txt("${s.accuracyPct}% Accuracy", 11, FontWeight.Medium, Color.White.copy(alpha = 0.9f))
                     }
                 }
@@ -682,8 +682,8 @@ fun RangeScreen(vm: TrainerViewModel) {
 
         // ---- Compact stat line ----
         val s = vm.menuStats[cat.id]
-        val statText = if (s == null || s.attempts == 0) "No Practice Data Yet for this Category"
-        else "${s.attempts} attempts · ${s.accuracyPct}% accuracy"
+        val statText = if (s == null || s.sessions == 0) "No Practice Data Yet for this Category"
+        else "${s.sessions} Sessions · ${s.accuracyPct}% Accuracy"
         Txt(statText, 11, FontWeight.Medium, c.muted, Modifier.fillMaxWidth(), TextAlign.Center)
 
         // FIX #8: perf — single action row.

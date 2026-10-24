@@ -288,15 +288,10 @@ fun CompactCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.
                 spotColor = Color.Black.copy(alpha = 0.12f)
             )
             .clip(shape)
+            // Draw the border over the solid background, inside the clip.
+            // This avoids the corner-stretching artifact and uses standard Compose APIs.
             .background(c.surface)
-            .drawWithContent {
-                drawContent()
-                drawOutline(
-                    outline = shape.createOutline(size, layoutDirection, this),
-                    color = c.borderColor,
-                    style = Stroke(width = 1.dp.toPx())
-                )
-            }
+            .border(1.dp, c.borderColor, shape)
             .padding(horizontal = 14.dp, vertical = 12.dp),
         verticalArrangement = Arrangement.spacedBy(6.dp),
         content = content

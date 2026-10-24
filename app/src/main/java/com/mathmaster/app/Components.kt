@@ -279,44 +279,37 @@ fun SoftButton(
 @Composable
 fun CompactCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val c = AppTheme.colors
+    val cornerDp = 18.dp
+    val shape = RoundedCornerShape(cornerDp)
     val surface = c.surface
-    // Faint purple, flattened to an opaque color (works in light and dark mode).
+    // Opaque border color, matches the visual weight of the faint purple.
     val ring = c.borderColor.compositeOver(c.surface)
+    // Border width in whole pixels, minimum 1px.
+    val borderPx = remember { kotlin.math.round(1.dp.value).coerceAtLeast(1f) }
 
     Column(
         modifier
             .fillMaxWidth()
+            // Platform shadow so the border has the same visual weight
+            // as the cards on the Category Detail screen.
+            .shadow(
+                elevation = 4.dp, shape = shape, clip = false,
+                ambientColor = Color.Black.copy(alpha = 0.10f),
+                spotColor = Color.Black.copy(alpha = 0.15f)
+            )
             .drawBehind {
-                val corner = 18.dp.toPx()
-                // Whole-pixel border width, never thinner than 1px.
-                val t = kotlin.math.round(1.dp.toPx()).coerceAtLeast(1f)
-
-                // 1) Soft shadow: stacked translucent rounded rects, widest first.
-                //    Only the part outside the card stays visible; the card covers the rest.
-                val spread = 6.dp.toPx()
-                val dy = 2.dp.toPx()
-                for (i in 5 downTo 1) {
-                    val g = spread * i / 5
-                    drawRoundRect(
-                        color = Color.Black.copy(alpha = 0.018f),
-                        topLeft = Offset(-g, -g + dy),
-                        size = Size(size.width + 2f * g, size.height + 2f * g),
-                        cornerRadius = CornerRadius(corner + g, corner + g)
-                    )
-                }
-
-                // 2) Border: a solid rounded rect in the border color.
+                val corner = cornerDp.toPx()
+                // 1) Border: full card bounds, in border color.
                 drawRoundRect(
                     color = ring,
                     cornerRadius = CornerRadius(corner, corner)
                 )
-
-                // 3) Fill: inset by the border width, radius reduced by the same amount.
-                val innerR = (corner - t).coerceAtLeast(0f)
+                // 2) Fill: inset by borderPx, radius reduced by borderPx.
+                val innerR = (corner - borderPx).coerceAtLeast(0f)
                 drawRoundRect(
                     color = surface,
-                    topLeft = Offset(t, t),
-                    size = Size(size.width - 2f * t, size.height - 2f * t),
+                    topLeft = Offset(borderPx, borderPx),
+                    size = Size(size.width - 2f * borderPx, size.height - 2f * borderPx),
                     cornerRadius = CornerRadius(innerR, innerR)
                 )
             }

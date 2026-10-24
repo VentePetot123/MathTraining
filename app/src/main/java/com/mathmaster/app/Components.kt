@@ -64,6 +64,7 @@ import androidx.compose.ui.text.input.KeyboardType
 import androidx.compose.ui.composed
 import androidx.compose.ui.draw.alpha
 import androidx.compose.ui.draw.clip
+import androidx.compose.ui.draw.drawWithContent
 import androidx.compose.ui.draw.rotate
 import androidx.compose.ui.draw.shadow
 import androidx.compose.ui.geometry.Offset
@@ -278,7 +279,6 @@ fun SoftButton(
 fun CompactCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.() -> Unit) {
     val c = AppTheme.colors
     val shape = RoundedCornerShape(18.dp)
-    val outline = c.borderColor
     Column(
         modifier
             .fillMaxWidth()
@@ -291,12 +291,10 @@ fun CompactCard(modifier: Modifier = Modifier, content: @Composable ColumnScope.
             .background(c.surface)
             .drawWithContent {
                 drawContent()
-                // Draw a smooth 1.5dp outline via the native Canvas, 
-                // which prevents the corner-stretching artifact.
                 drawOutline(
-                    outline = outline,
-                    shape = shape,
-                    strokeWidth = 1.5.dp.toPx()
+                    outline = shape.createOutline(size, layoutDirection, this),
+                    color = c.borderColor,
+                    style = Stroke(width = 1.dp.toPx())
                 )
             }
             .padding(horizontal = 14.dp, vertical = 12.dp),

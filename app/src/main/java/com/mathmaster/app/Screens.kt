@@ -429,7 +429,7 @@ fun CategoryCard(index: Int, cat: Category, s: CatSummary?, onClick: () -> Unit)
                     if (s == null || s.sessions == 0) {
                         Txt("Not Practiced Yet", 11, FontWeight.Medium, Color.White.copy(alpha = 0.9f))
                     } else {
-                        Txt("${formatAttempts(s.sessions)} Sessions", 11, FontWeight.Medium, Color.White.copy(alpha = 0.9f))
+                        Txt("${formatSessions(s.sessions)} Sessions", 11, FontWeight.Medium, Color.White.copy(alpha = 0.9f))
                         Txt("${s.accuracyPct}% Accuracy", 11, FontWeight.Medium, Color.White.copy(alpha = 0.9f))
                     }
                 }
@@ -683,7 +683,7 @@ fun RangeScreen(vm: TrainerViewModel) {
         // ---- Compact stat line ----
         val s = vm.menuStats[cat.id]
         val statText = if (s == null || s.sessions == 0) "No Practice Data Yet for this Category"
-        else "${s.sessions} Sessions · ${s.accuracyPct}% Accuracy"
+        else "${formatSessions(s.sessions)} Sessions · ${s.accuracyPct}% Accuracy"
         Txt(statText, 11, FontWeight.Medium, c.muted, Modifier.fillMaxWidth(), TextAlign.Center)
 
         // FIX #8: perf — single action row.
@@ -701,6 +701,12 @@ fun RangeScreen(vm: TrainerViewModel) {
 
 @Composable
 private fun formatAttempts(n: Int): String = if (n > 999) "999+" else n.toString()
+
+// Formats sessions to max 7 characters (e.g. 9,999,999+).
+private fun formatSessions(n: Int): String = when {
+    n > 9_999_999 -> "9,999,999+"
+    else -> String.format(Locale.US, "%,d", n)
+}
 
 // FIX #8 — collapsible "To Review" section for the Results screen. Mirrors the
 // visual language of the Strength/Weakness tables: a SectionTitle with lines on

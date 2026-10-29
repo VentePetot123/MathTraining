@@ -137,7 +137,8 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     data class DashboardData(
         val mastery: Map<String, Triple<Int, Int, Int>>,
         val history: Map<String, HistoryRef>,
-        val details: Map<String, List<AdaptiveEngine.FactDetail>>
+        val details: Map<String, List<AdaptiveEngine.FactDetail>>,
+        val best: Map<String, Int> = emptyMap()
     )
     var dashboard by mutableStateOf<DashboardData?>(null)
         private set
@@ -173,10 +174,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         dashboardLoading = true
         viewModelScope.launch {
             val data = withContext(Dispatchers.IO) {
-                val mastery = Categories.all.associate { it.id to engine.mastery(it.id) }
-                val history = Categories.all.associate { it.id to engine.historyRef(it.id) }
-                val details = Categories.all.associate { it.id to engine.details(it.id) }
-                DashboardData(mastery, history, details)
+                buildDashboard()
             }
             dashboard = data
             dashboardLoading = false
@@ -226,11 +224,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
 
             // 2. Dashboard — computed here so tapping Progress/Math Master doesn't
             //    spend 30-50ms mapping Categories.all into DashboardData on the slide.
-            dashboard = DashboardData(
-                Categories.all.associate { it.id to engine.mastery(it.id) },
-                Categories.all.associate { it.id to engine.historyRef(it.id) },
-                Categories.all.associate { it.id to engine.details(it.id) }
-            )
+            dashboard = buildDashboard()
 
             // 3. Fact generators — the heaviest pure-Kotlin code. A single call
             //    through each category's generator JITs the `for` loops and `Fact`
@@ -265,7 +259,8 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
     private fun buildDashboard() = DashboardData(
         Categories.all.associate { it.id to engine.mastery(it.id) },
         Categories.all.associate { it.id to engine.historyRef(it.id) },
-        Categories.all.associate { it.id to engine.details(it.id) }
+        Categories.all.associate { it.id to engine.details(it.id) },
+        Categories.all.associate { it.id to engine.bestStreak(it.id) }
     )
 
     private var dashJob: Job? = null
@@ -474,13 +469,7 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         viewModelScope.launch {
             val start = SystemClock.elapsedRealtime()
             withContext(Dispatchers.IO) { work() }
-            val data = withContext(Dispatchers.IO) {
-                DashboardData(
-                    Categories.all.associate { it.id to engine.mastery(it.id) },
-                    Categories.all.associate { it.id to engine.historyRef(it.id) },
-                    Categories.all.associate { it.id to engine.details(it.id) }
-                )
-            }
+            val data = withContext(Dispatchers.IO) { buildDashboard() }
             dashboard = data
             refreshMenu()
             // Hold the overlay for a minimum so it's always perceived.
@@ -822,6 +811,9 @@ class TrainerViewModel(app: Application) : AndroidViewModel(app) {
         if (streak > rt.sessionBestStreak) {
             rt.sessionBestStreak = streak
         }
+
+        // Per-category session record (only ever written from the session-scoped streak).
+        if (verdict) engine.updateCatBest(u.categoryId, streak)
 
         // Update the global best if this is a new record
         if (streak > store.bestStreak()) {

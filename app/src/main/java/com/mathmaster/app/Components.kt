@@ -1069,21 +1069,44 @@ fun StreakCounter(
     }
 }
 
-// Static streak: digits + flame, centered edge-to-edge, flame exactly as tall as the digit ink.
+// Exact ink bounds of FlameIcon's outer path (same path as in FlameIcon, 1x1 box).
+private val FlameInkBox: Rect by lazy {
+    Path().apply {
+        moveTo(0.50f, 0.02f)
+        cubicTo(0.55f, 0.22f, 0.88f, 0.38f, 0.86f, 0.64f)
+        cubicTo(0.85f, 0.85f, 0.68f, 0.98f, 0.50f, 0.98f)
+        cubicTo(0.32f, 0.98f, 0.15f, 0.85f, 0.14f, 0.64f)
+        cubicTo(0.13f, 0.50f, 0.22f, 0.40f, 0.30f, 0.32f)
+        cubicTo(0.30f, 0.44f, 0.36f, 0.50f, 0.42f, 0.52f)
+        cubicTo(0.38f, 0.32f, 0.44f, 0.14f, 0.50f, 0.02f)
+        close()
+    }.getBounds()
+}
+
+// Static streak: digits + animated flame, centered edge-to-edge as one group,
+// flame ink exactly as tall as the digit ink, with a label underneath.
 @Composable
-fun StaticStreak(value: Int, color: Color, textSizeSp: Int = 32, modifier: Modifier = Modifier) {
+fun StaticStreak(
+    value: Int,
+    color: Color,
+    textSizeSp: Int = 32,
+    label: String? = "STREAK",
+    modifier: Modifier = Modifier
+) {
+    val c = AppTheme.colors
     val text = value.toString()
     val density = LocalDensity.current
     val argb = color.toArgb()
+    val fi = FlameInkBox
 
-    val (paint, ink) = remember(text, density, argb) {
-        val p = android.graphics.Paint().apply {
+    val (paint, ink) = remember(text, density, argb, textSizeSp) {
+        val p = Paint().apply {
             isAntiAlias = true
             textSize = with(density) { textSizeSp.sp.toPx() }
             this.color = argb
             typeface = if (Build.VERSION.SDK_INT >= 28)
-                android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, 800, false)
-            else android.graphics.Typeface.DEFAULT_BOLD
+                Typeface.create(Typeface.DEFAULT, 800, false)
+            else Typeface.DEFAULT_BOLD
         }
         val r = android.graphics.Rect()
         p.getTextBounds(text, 0, text.length, r)
@@ -1092,10 +1115,35 @@ fun StaticStreak(value: Int, color: Color, textSizeSp: Int = 32, modifier: Modif
 
     val inkW = ink.width().coerceAtLeast(1)
     val inkH = ink.height().coerceAtLeast(1)
-    val flameSide = (inkH / 0.96f).roundToInt().coerceAtLeast(1)
+
+    // Flame box sized so its VISIBLE height equals the digits' ink height.
+    val flameSide = (inkH / (fi.bottom - fi.top)).roundToInt().coerceAtLeast(1)
     val flameDp = with(density) { flameSide.toDp() }
 
-    Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+    // Burning animation. Scale never exceeds 1f, so the flame never grows taller
+    // than the digits; it is anchored at its ink bottom so it stays on the baseline.
+    val burn = rememberInfiniteTransition(label = "burn")
+    val flickH by burn.animateFloat(
+        initialValue = 0.90f, targetValue = 1f,
+        animationSpec = infiniteRepeatable(tween(380, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "flickH"
+    )
+    val flickW by burn.animateFloat(
+        initialValue = 1f, targetValue = 0.93f,
+        animationSpec = infiniteRepeatable(tween(530, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "flickW"
+    )
+    val sway by burn.animateFloat(
+        initialValue = -2.5f, targetValue = 2.5f,
+        animationSpec = infiniteRepeatable(tween(720, easing = FastOutSlowInEasing), RepeatMode.Reverse),
+        label = "sway"
+    )
+
+    Column(
+        modifier.fillMaxWidth(),
+        horizontalAlignment = Alignment.CenterHorizontally,
+        verticalArrangement = Arrangement.spacedBy(6.dp)
+    ) {
         Layout(
             content = {
                 Canvas(Modifier.fillMaxSize()) {
@@ -1103,23 +1151,41 @@ fun StaticStreak(value: Int, color: Color, textSizeSp: Int = 32, modifier: Modif
                         text, -ink.left.toFloat(), -ink.top.toFloat(), paint
                     )
                 }
-                FlameIcon(flameDp)
+                FlameIcon(
+                    flameDp,
+                    Modifier.graphicsLayer {
+                        scaleX = flickW
+                        scaleY = flickH
+                        rotationZ = sway
+                        transformOrigin = TransformOrigin(0.5f, fi.bottom)
+                    }
+                )
             }
         ) { measurables, _ ->
             val gapPx = 6.dp.roundToPx()
             val t = measurables[0].measure(Constraints.fixed(inkW, inkH))
             val f = measurables[1].measure(Constraints.fixed(flameSide, flameSide))
 
-            val flameInkL = flameSide * 0.135f
-            val flameInkW = flameSide * (0.865f - 0.135f)
+            val flameInkL = flameSide * fi.left
+            val flameInkW = flameSide * (fi.right - fi.left)
+
+            // Layout box == digit ink + gap + flame ink, edge to edge.
             val groupW = (inkW + gapPx + flameInkW).roundToInt()
             val flameX = (inkW + gapPx - flameInkL).roundToInt()
-            val flameY = (-flameSide * 0.02f).roundToInt()
+            val flameY = (-flameSide * fi.top).roundToInt()   // flame ink top == digit ink top
 
             layout(groupW, inkH) {
                 t.place(0, 0)
                 f.place(flameX, flameY)
             }
+        }
+
+        if (label != null) {
+            Text(
+                label, color = c.muted, fontSize = 12.sp,
+                fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp,
+                lineHeight = 12.sp, textAlign = TextAlign.Center
+            )
         }
     }
 }

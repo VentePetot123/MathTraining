@@ -1881,7 +1881,12 @@ fun CategoryProgressSection(
             verticalArrangement = Arrangement.spacedBy(6.dp)
         ) {
             SectionTitle("Best Streak")
-            StaticStreak(bestStreak, c.success, textSizeSp = 32)
+            StaticStreak(bestStreak, c.success, textSizeSp = 32, label = null)
+            Text(
+                "STREAK", color = c.muted, fontSize = 12.sp,
+                fontWeight = FontWeight.ExtraBold, letterSpacing = 2.sp,
+                lineHeight = 12.sp, textAlign = TextAlign.Center
+            )
         }
 
         val ranks = remember(details) { rankFacts(details) }

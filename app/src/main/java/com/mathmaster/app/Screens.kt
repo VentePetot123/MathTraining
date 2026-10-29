@@ -1634,6 +1634,7 @@ fun ProgressScreen(vm: TrainerViewModel) {
                         history = dash.history[cat.id] ?: HistoryRef.EMPTY,
                         details = dash.details[cat.id] ?: emptyList(),
                         onOpen = { vm.openCategoryDetail(cat) },
+                        bestStreak = dash.best[cat.id] ?: 0,
                         // FIX #8 — dashboard cards are compact: no charts, no detailed
                         // lists. Tapping the card opens CategoryDetailScreen which
                         // passes detailed = true and shows the full breakdown.
@@ -1740,6 +1741,7 @@ fun CategoryDetailScreen(vm: TrainerViewModel) {
                 history = dash.history[cat.id] ?: HistoryRef.EMPTY,
                 details = dash.details[cat.id] ?: emptyList(),
                 onOpen = null,
+                bestStreak = dash.best[cat.id] ?: 0,
                 showHeader = false
             )
         }
@@ -1835,7 +1837,8 @@ fun CategoryProgressSection(
     // lists. When false (Progress Dashboard card grid), only the top half renders:
     // header, mastery bars, and the one-line strengths/weaknesses summary. Tapping
     // the card opens the full detail (CategoryDetailScreen) which passes detailed=true.
-    detailed: Boolean = true
+    detailed: Boolean = true,
+    bestStreak: Int = 0
 ) {
     val c = AppTheme.colors
     val clickMod = if (onOpen != null)
@@ -1870,6 +1873,15 @@ fun CategoryProgressSection(
                 MasteryBar("Learning",   mastery.second,   c.warning)
                 MasteryBar("Struggling", mastery.third,    c.error)
             }
+        }
+
+        Column(
+            Modifier.fillMaxWidth().padding(top = 4.dp),
+            horizontalAlignment = Alignment.CenterHorizontally,
+            verticalArrangement = Arrangement.spacedBy(6.dp)
+        ) {
+            SectionTitle("Best Streak")
+            StaticStreak(bestStreak, c.success, textSizeSp = 32)
         }
 
         val ranks = remember(details) { rankFacts(details) }
@@ -1920,18 +1932,27 @@ private class FactRanks(
 )
 
 private fun rankFacts(details: List<AdaptiveEngine.FactDetail>) = FactRanks(
+    // STRENGTH: fast facts first; within each speed bin, most corrects first.
     strengths = details.filter { it.correct > 0 }.sortedWith(
-        compareByDescending<AdaptiveEngine.FactDetail> { it.correct - it.incorrect }
-            .thenByDescending { it.correct }
+        compareBy<AdaptiveEngine.FactDetail> {
+            // 0 = fast (avgMs <= expectedMs), 1 = slow
+            if (it.avgMs <= it.expectedMs) 0 else 1
+        }
+            .thenByDescending { it.correct }       // Most corrects inside the bin
+            .thenBy { it.avgMs }                   // Then fastest wins ties
             .thenBy { it.key }
     ),
+    // WEAKNESS: fast facts first; within each speed bin, most wrongs first.
     weaknesses = details.filter { it.incorrect > 0 }.sortedWith(
-        compareByDescending<AdaptiveEngine.FactDetail> { it.incorrect - it.correct }
-            .thenByDescending { it.incorrect }
-            .thenByDescending { it.lastSeen }
+        compareBy<AdaptiveEngine.FactDetail> {
+            if (it.avgMs <= it.expectedMs) 0 else 1
+        }
+            .thenByDescending { it.incorrect }     // Most wrongs inside the bin
+            .thenBy { it.avgMs }                   // Then fastest wins ties
+            .thenByDescending { it.lastSeen }      // Then most recent
+            .thenBy { it.key }
     )
 )
-
 
 @Composable
 private fun MasteryBar(label: String, pct: Int, color: Color) {

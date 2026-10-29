@@ -97,7 +97,8 @@ class Store(context: Context) {
     }
 
     fun clearCategory(cat: String) {
-        prefs.edit().remove("stats_$cat").remove("win_$cat").remove("hist_$cat").apply()
+        prefs.edit().remove("stats_$cat").remove("win_$cat").remove("hist_$cat")
+            .remove("best_streak_$cat").apply()
         history.clear(cat)
     }
 
@@ -257,6 +258,10 @@ class Store(context: Context) {
         flushTotals()
         prefs.edit().putBoolean("best_streak_repaired_v1", true).apply()
     }
+    fun catBestStreak(cat: String): Int = prefs.getInt("best_streak_$cat", 0)
+    fun updateCatBest(cat: String, streak: Int) {
+        if (streak > catBestStreak(cat)) prefs.edit().putInt("best_streak_$cat", streak).apply()
+    }
     fun isSoundEnabled(): Boolean = prefs.getBoolean("sound_enabled", true)
     fun getThemeMode(): String = prefs.getString("theme_mode", "System") ?: "System"
     fun setThemeMode(name: String) { prefs.edit().putString("theme_mode", name).apply() }
@@ -359,7 +364,12 @@ class AdaptiveEngine(private val store: Store) {
         val key: String, val prompt: String, val answer: String,
         val correct: Int, val incorrect: Int, val avgMs: Double,
         val lastSeen: Long, val difficulty: Double
-    )
+    ) {
+        // Expected time for this fact, in ms. Used by the UI to bin fast vs slow.
+        val expectedMs: Double get() = Fsrs.expectedMs(
+            Fact(key, prompt, answer, "", Kind.INT)
+        )
+    }
 
     @Synchronized
     fun details(cat: String): List<FactDetail> =
@@ -473,6 +483,9 @@ class AdaptiveEngine(private val store: Store) {
         )
         synchronized(this) { historyRefCache.remove(cat) }
     }
+
+    fun bestStreak(cat: String): Int = store.catBestStreak(cat)
+    fun updateCatBest(cat: String, streak: Int) = store.updateCatBest(cat, streak)
 
     fun historyRef(cat: String): HistoryRef {
         historyRefCache[cat]?.let { return it }

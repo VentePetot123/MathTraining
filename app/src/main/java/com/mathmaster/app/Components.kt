@@ -56,6 +56,7 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.focus.FocusRequester
 import androidx.compose.ui.focus.focusRequester
 import androidx.compose.ui.graphics.SolidColor
+import androidx.compose.ui.graphics.toArgb
 import androidx.compose.ui.text.TextRange
 import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.input.TextFieldValue
@@ -1064,6 +1065,61 @@ fun StreakCounter(
         layout(constraints.maxWidth, (maxY - minY).roundToInt()) {
             t.placeRelative(textX.roundToInt(), (-minY).roundToInt())
             fl.placeRelative(endFlameX.roundToInt(), (flameTop - minY).roundToInt())
+        }
+    }
+}
+
+// Static streak: digits + flame, centered edge-to-edge, flame exactly as tall as the digit ink.
+@Composable
+fun StaticStreak(value: Int, color: Color, textSizeSp: Int = 32, modifier: Modifier = Modifier) {
+    val text = value.toString()
+    val density = LocalDensity.current
+    val argb = color.toArgb()
+
+    val (paint, ink) = remember(text, density, argb) {
+        val p = android.graphics.Paint().apply {
+            isAntiAlias = true
+            textSize = with(density) { textSizeSp.sp.toPx() }
+            this.color = argb
+            typeface = if (Build.VERSION.SDK_INT >= 28)
+                android.graphics.Typeface.create(android.graphics.Typeface.DEFAULT, 800, false)
+            else android.graphics.Typeface.DEFAULT_BOLD
+        }
+        val r = android.graphics.Rect()
+        p.getTextBounds(text, 0, text.length, r)
+        p to r
+    }
+
+    val inkW = ink.width().coerceAtLeast(1)
+    val inkH = ink.height().coerceAtLeast(1)
+    val flameSide = (inkH / 0.96f).roundToInt().coerceAtLeast(1)
+    val flameDp = with(density) { flameSide.toDp() }
+
+    Box(modifier.fillMaxWidth(), contentAlignment = Alignment.Center) {
+        Layout(
+            content = {
+                Canvas(Modifier.fillMaxSize()) {
+                    drawContext.canvas.nativeCanvas.drawText(
+                        text, -ink.left.toFloat(), -ink.top.toFloat(), paint
+                    )
+                }
+                FlameIcon(flameDp)
+            }
+        ) { measurables, _ ->
+            val gapPx = 6.dp.roundToPx()
+            val t = measurables[0].measure(Constraints.fixed(inkW, inkH))
+            val f = measurables[1].measure(Constraints.fixed(flameSide, flameSide))
+
+            val flameInkL = flameSide * 0.135f
+            val flameInkW = flameSide * (0.865f - 0.135f)
+            val groupW = (inkW + gapPx + flameInkW).roundToInt()
+            val flameX = (inkW + gapPx - flameInkL).roundToInt()
+            val flameY = (-flameSide * 0.02f).roundToInt()
+
+            layout(groupW, inkH) {
+                t.place(0, 0)
+                f.place(flameX, flameY)
+            }
         }
     }
 }
